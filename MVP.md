@@ -4,29 +4,27 @@
 
 A reusable food container can be tracked through issue, return, wash readiness, and recirculation without losing the human return experience.
 
-## Included in the submission prototype
+## Included in Phase A
 
 - Long editorial landing page
-- Kora Kitchen operator dashboard
-- Container issue/scan surface
-- Maya L. customer return pass
-- Simulated return confirmation
-- Updated ledger and impact numbers
+- Authenticated business operator and consumer accounts
+- Persistent users, venues, containers, borrows, deposit ledger states, and circulation events
+- Operator venue management, QR container registration, camera detection, and circulation controls
+- Consumer current-borrow and return-status dashboard
+- Kora Kitchen, Maya L., RT-024, and EUR 3.00 as clearly labeled seeded demo data
 - Legal surfaces and responsive navigation
 - Keyboard, focus, and reduced-motion support
 
 ## Explicitly excluded
 
-- Accounts and authentication
 - Payment processor or wallet
-- Camera, QR hardware, or native mobile scanning
-- Database, notifications, maps, live venue discovery
+- Notifications, maps, live venue discovery, or native scanning hardware
 - Multi-venue pooling, marketplace, delivery, rewards, or analytics suite
 - Carbon-offset calculation or unverifiable environmental metrics
 
 ## Build order
 
-1. Preserve and verify the existing end-to-end journey.
-2. Polish the locked visual system and responsive behavior.
-3. Replace the editorial image with a stronger real food-service image if available.
+1. Keep the persisted issue, return, wash-ready, wash, and re-issue loop complete.
+2. Preserve the locked visual system and responsive behavior.
+3. Verify operator and consumer access boundaries.
 4. Prepare a five-minute-or-shorter demo and Devpost evidence.

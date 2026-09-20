@@ -23,12 +23,17 @@ Kora Kitchen issues RT-024 to Maya L. Maya receives a return pass with a simulat
 - Venue operator: needs to know what is out, what came back, and what needs washing.
 - Customer: needs a clear return point, container identity, deposit amount, and confirmation.
 
-## Non-goals for this prototype
+## Phase A product foundation
+
+The prototype journey is now backed by authenticated accounts and persistent D1 records. Business operators manage venues and container circulation. Consumers see their own current and returned borrows. Camera QR detection is available in supported browsers with a manual QR ID fallback.
+
+Deposit values remain ledger records only. ReTray does not collect, hold, release, or transfer money.
+
+## Current non-goals
 
 - Real payment collection or release
-- Authentication or personal data collection
-- Hardware QR integration
 - Delivery, a marketplace, recycling education, rewards, or city-wide availability
+- Native scanning hardware or precise location
 
 ## Source of truth
 

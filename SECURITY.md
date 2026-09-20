@@ -1,16 +1,22 @@
 # ReTray Security and Truthfulness Rules
 
-## Prototype boundary
+## Phase A boundary
 
-This is a frontend demonstration. It must not request personal information, payment information, wallet access, camera access, or location access.
+ReTray authenticates through the Sites identity headers and stores the minimum account identity, venue, container, borrow, and circulation data needed for the product loop. It does not request payment information, wallet access, or location access.
+
+Camera access begins only after an operator selects Start camera. QR frames are decoded in the browser and are not stored as images. A manual QR ID fallback remains available.
 
 ## Non-negotiable claims
 
-- Deposit holds and releases are simulated.
-- QR actions are simulated.
-- Names, venues, times, and container records are demo data stored in the interface.
+- Deposit values and statuses are ledger records only. No money moves.
+- QR IDs and circulation actions are persisted.
+- Kora Kitchen, Maya L., RT-024, and EUR 3.00 are seeded records marked as demo data.
 - No transaction is created and no money moves.
 
-## Future production boundary
+## Access and audit rules
 
-When a backend is added, a venue must only see its own container pool and customers must not access operator records. Payment events, return events, and manual overrides need an auditable event log. Do not add any backend until these access and audit rules are designed.
+- Only a business operator who owns a venue can mutate that venue or its container pool.
+- A consumer can read only borrows linked to their authenticated user ID.
+- Circulation events are append-only. Database triggers reject update and delete operations.
+- Every server action re-reads the authenticated identity and checks ownership.
+- Account type cannot be changed after onboarding.

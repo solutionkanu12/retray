@@ -17,15 +17,19 @@ export function LegalPage({ page, onBack }: LegalPageProps) {
         <div className="brand-lockup"><ReTrayMark className="brand-mark" /><span className="brand-word">ReTray</span></div>
       </div>
       <article className="legal-copy">
-        <p className="eyebrow">Prototype policy</p>
+        <p className="eyebrow">Product policy</p>
         <h1 data-view-heading tabIndex={-1}>{isPrivacy ? "Privacy Policy" : "Terms of Service"}</h1>
         <p className="legal-copy__date">Effective 11 September 2026</p>
         {isPrivacy ? (
           <>
-            <h2>About this prototype</h2>
-            <p>This ReTray prototype demonstrates a reusable-container journey. It does not process real payments, identity, QR scans, precise location, or customer data.</p>
-            <h2>Information shown</h2>
-            <p>Names, container records, venues, timestamps, and deposit values are fictional demo content stored in the page interface. They are not submitted to a server.</p>
+            <h2>About this MVP</h2>
+            <p>ReTray uses authenticated account details to provide operator and consumer access. It stores venues, container records, borrow records, and circulation events needed to run the reusable-container loop.</p>
+            <h2>Information stored</h2>
+            <p>Account identity, venue names, container identifiers, consumer assignments, timestamps, and deposit ledger states are stored in the product database. Seeded records are labeled as demo data.</p>
+            <h2>Camera access</h2>
+            <p>The operator scanner requests camera access only after the operator starts it. QR frames are decoded in the browser and are not stored as images.</p>
+            <h2>Payments and location</h2>
+            <p>ReTray does not collect or release money and does not request precise location. Deposit entries describe the ledger state only.</p>
             <h2>External content</h2>
             <p>The landing page loads one licensed photograph from Pexels and typefaces from Google Fonts. Those providers may receive ordinary browser request information under their own policies.</p>
             <h2>Contact</h2>
@@ -33,14 +37,14 @@ export function LegalPage({ page, onBack }: LegalPageProps) {
           </>
         ) : (
           <>
-            <h2>Prototype use</h2>
-            <p>ReTray is provided here as a frontend demonstration of a reusable food-packaging loop. It is not a live container service, payment system, or venue agreement. It processes no real identity, QR scans, or customer data.</p>
-            <h2>Simulated actions</h2>
-            <p>Container scans, deposit holds, deposit releases, operator records, and impact updates are simulated. Do not rely on them as evidence of a real transaction.</p>
+            <h2>MVP use</h2>
+            <p>ReTray records reusable-container operations for authenticated business operators and consumers. It is not a payment system or a venue agreement.</p>
+            <h2>Deposit ledger</h2>
+            <p>Deposit amounts and statuses are operational ledger entries only. ReTray does not collect, hold, release, or transfer money.</p>
             <h2>Availability</h2>
-            <p>The prototype may change or become unavailable. No account, purchase, or production service is created by using it.</p>
+            <p>The MVP may change or become unavailable. Authentication creates a ReTray account record, but no purchase or payment account is created.</p>
             <h2>Responsible use</h2>
-            <p>Use the interface only to evaluate the demonstrated product flow. Do not enter personal or payment information.</p>
+            <p>Use only venue and container information needed for the circulation loop. Do not enter payment card or bank information.</p>
           </>
         )}
       </article>

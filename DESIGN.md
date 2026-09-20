@@ -19,7 +19,7 @@ The prototype proves one complete loop:
 5. RT-024 becomes Ready to wash in the venue ledger.
 6. The venue impact count increases.
 
-No copy may imply real payments, authentication, hardware scanning, city-wide availability, or production integrations.
+Authentication, persisted QR circulation, and browser camera detection are real in Phase A. No copy may imply real payments, native scanning hardware, city-wide availability, or production integrations.
 
 ## Primary users
 

@@ -10,7 +10,17 @@ Prove a credible reusable-container loop that a food venue can understand in und
 2. A venue operator can open the dashboard and begin the flow in one action.
 3. A customer can see where to return RT-024 and what happens to the simulated deposit.
 4. Confirming the return visibly updates the container status, wash queue, and impact total.
-5. The product never claims to execute real payments, scans, accounts, or location services.
+5. Authentication, persisted circulation records, and browser QR detection are real. The product never claims to execute payments, native hardware scanning, or location services.
+
+## Phase A product requirements
+
+- Sites-authenticated users choose a permanent business operator or consumer account type.
+- Business operators can create and rename venues, register QR containers, and record issue, return, wash-ready, and washed events.
+- Consumers can see only their own borrowed and returned container records.
+- Dashboard values are calculated from D1 records.
+- Circulation events cannot be updated or deleted.
+- Deposit values are ledger-only records and never imply money movement.
+- Kora Kitchen, Maya L., RT-024, and EUR 3.00 remain clearly marked seed data.
 
 ## Required flow
 
@@ -24,8 +34,8 @@ Prove a credible reusable-container loop that a food venue can understand in und
 
 ## Functional requirements
 
-- Keep all shared values in one journey model.
-- Keep loop transitions in a deterministic reducer with tests.
+- Keep loop transitions in a deterministic domain model with tests.
+- Enforce operator ownership and consumer record boundaries on the server.
 - Focus the page heading after each view change.
 - Respect reduced-motion preferences.
 - Provide dedicated Privacy Policy and Terms of Service views.
