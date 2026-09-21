@@ -58,3 +58,7 @@ dist
 %SystemDrive%/
 ({src
 e.getBoundingClientRect().height))})
+
+.dev.vars
+.dev.vars.*
+!.env.example

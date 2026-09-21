@@ -15,6 +15,13 @@
       "when": 1789980186040,
       "tag": "0001_nervous_sally_floyd",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790008405318,
+      "tag": "0002_slimy_hellcat",
+      "breakpoints": true
     }
   ]
 }
