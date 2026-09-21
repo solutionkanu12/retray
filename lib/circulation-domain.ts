@@ -61,3 +61,12 @@ export function assertConsumerAccess(
     throw new Error("A consumer cannot read another consumer's borrow ledger.")
   }
 }
+
+export function assertBorrowReturnAccess(
+  user: AccessIdentity,
+  consumerUserId: string,
+  status: "active" | "returned",
+): void {
+  assertConsumerAccess(user, consumerUserId)
+  if (status !== "active") throw new Error("This borrow is already returned.")
+}

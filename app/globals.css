@@ -483,6 +483,15 @@ img, svg { display: block; }
 .consumer-borrow-row div { display: flex; flex-direction: column; gap: 4px; }
 .consumer-borrow-row span, .consumer-borrow-row small { color: var(--muted); font-size: 10px; }
 .consumer-borrow-row strong { color: var(--ink-soft); font-size: 12px; }
+.auth-page .onboarding-panel { max-width: 560px; }
+.auth-form { margin-top: 32px; }
+.auth-form label > span { color: var(--muted); font-size: 11px; }
+.account-role-options { padding: 0; display: flex; flex-wrap: wrap; gap: 12px 24px; border: 0; }
+.account-role-options legend { margin-bottom: 10px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.account-role-options label { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-soft); }
+.account-role-options input { width: auto; min-height: 0; accent-color: var(--rose); }
+.auth-form:has(input[value="consumer"]:checked) .auth-venue-field { display: none; }
+.product-header .text-link { padding: 0; border: 0; background: transparent; color: var(--ink-soft); cursor: pointer; font: inherit; }
 
 @media (max-width: 920px) {
   .product-header, .product-main, .product-message { width: min(100% - 64px, 1180px); }

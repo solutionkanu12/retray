@@ -145,10 +145,17 @@ export function CameraScanner({ containers, venueId }: CameraScannerProps) {
           </p>
         ) : null}
         {selected?.status === "available" ? (
-          <label>
-            Consumer email
-            <input name="consumerEmail" placeholder="Signed-in consumer email" required type="email" />
-          </label>
+          <>
+            <label>
+              Consumer email
+              <input name="consumerEmail" placeholder="Consumer account email" required type="email" />
+            </label>
+            <label>
+              Expected refundable deposit in EUR
+              <input min="0" max="9999.99" name="depositAmount" placeholder="0.00" step="0.01" type="number" />
+            </label>
+            <p>No payment is collected by ReTray. The default ledger amount is 0.</p>
+          </>
         ) : null}
         <input name="eventType" type="hidden" value={selected ? nextEvent(selected.status) : ""} />
         <button className="button button--rose" disabled={!selected} type="submit">

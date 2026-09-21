@@ -3,6 +3,7 @@ import test from "node:test"
 
 import {
   assertConsumerAccess,
+  assertBorrowReturnAccess,
   assertVenueAccess,
   transitionContainer,
 } from "../lib/circulation-domain.ts"
@@ -15,6 +16,13 @@ test("circulation follows the complete persisted lifecycle", () => {
     "ready_to_wash",
   )
   assert.equal(transitionContainer("ready_to_wash", "washed"), "available")
+})
+
+test("only the borrower can return an active borrow", () => {
+  assert.doesNotThrow(() => assertBorrowReturnAccess({ id: "consumer-1", accountType: "consumer" }, "consumer-1", "active"))
+  assert.throws(() => assertBorrowReturnAccess({ id: "consumer-2", accountType: "consumer" }, "consumer-1", "active"), /another consumer/i)
+  assert.throws(() => assertBorrowReturnAccess({ id: "consumer-1", accountType: "consumer" }, "consumer-1", "returned"), /already returned/i)
+  assert.throws(() => assertBorrowReturnAccess({ id: "operator-1", accountType: "business_operator" }, "consumer-1", "active"), /consumer account/i)
 })
 
 test("circulation rejects skipped and repeated transitions", () => {

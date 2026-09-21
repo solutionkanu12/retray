@@ -14,14 +14,16 @@ Read in this order:
 ## Important code locations
 
 - `components/retray-app.tsx`: view orchestration and the demo actions
-- `app/app/page.tsx`: authenticated operator and consumer product entry
+- `app/sign-up/page.tsx`, `app/sign-in/page.tsx`, `app/api/auth/`: account entry and session routes
+- `lib/auth-data.ts`, `lib/auth-core.ts`, `lib/auth-session.ts`: D1 accounts, password hashing, and sessions
+- `app/app/page.tsx`: session-authenticated operator and consumer product entry
 - `app/app/actions.ts`: authenticated server mutations
 - `lib/retray-data.ts`: D1 queries, ownership checks, and circulation writes
 - `lib/circulation-domain.ts`: transition and access rules
 - `lib/qr-code.ts`: dependency-free QR SVG encoder
 - `db/schema.ts`: persisted Phase A data model
-- `db/bootstrap.ts`: idempotent local D1 setup and demo seed
-- `drizzle/0000_lucky_namora.sql`: deployable schema, immutable-event triggers, and demo seed
+- `db/bootstrap.ts`: idempotent D1 setup without automatic demo records
+- `drizzle/0000_lucky_namora.sql`, `drizzle/0001_nervous_sally_floyd.sql`: deployable schema, credentials, sessions, and immutable-event triggers
 - `lib/retray-state.ts`: loop state and deterministic transitions
 - `lib/journey-model.ts`: shared return data and input validation
 - `components/landing-page.tsx`: public narrative and all landing sections

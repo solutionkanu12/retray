@@ -14,13 +14,13 @@ Prove a credible reusable-container loop that a food venue can understand in und
 
 ## Phase A product requirements
 
-- Sites-authenticated users choose a permanent business operator or consumer account type.
+- Users sign up and sign in with email and password, selecting a permanent business operator or consumer account type. Business signup creates its first venue.
 - Business operators can create and rename venues, register QR containers, and record issue, return, wash-ready, and washed events.
-- Consumers can see only their own borrowed and returned container records.
+- Consumers can see and return only their own borrowed containers, by camera QR detection where supported or manual QR payload.
 - Dashboard values are calculated from D1 records.
 - Circulation events cannot be updated or deleted.
 - Deposit values are ledger-only records and never imply money movement.
-- Kora Kitchen, Maya L., RT-024, and EUR 3.00 remain clearly marked seed data.
+- Kora Kitchen, Maya L., RT-024, and EUR 3.00 remain clearly marked optional demo fixtures and never populate a new account by default.
 
 ## Required flow
 

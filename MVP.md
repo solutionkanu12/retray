@@ -7,11 +7,11 @@ A reusable food container can be tracked through issue, return, wash readiness, 
 ## Included in Phase A
 
 - Long editorial landing page
-- Authenticated business operator and consumer accounts
+- Self-service email/password business operator and consumer accounts with durable D1 sessions
 - Persistent users, venues, containers, borrows, deposit ledger states, and circulation events
 - Operator venue management, QR container registration, camera detection, and circulation controls
 - Consumer current-borrow and return-status dashboard
-- Kora Kitchen, Maya L., RT-024, and EUR 3.00 as clearly labeled seeded demo data
+- Kora Kitchen, Maya L., RT-024, and EUR 3.00 as optional labeled demo fixtures, never default account records
 - Legal surfaces and responsive navigation
 - Keyboard, focus, and reduced-motion support
 

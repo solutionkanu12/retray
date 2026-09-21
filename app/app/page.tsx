@@ -1,10 +1,8 @@
-import { AccountOnboarding } from "@/components/account-onboarding"
 import { ConsumerDashboard } from "@/components/consumer-dashboard"
 import { OperatorDashboard } from "@/components/operator-dashboard"
 import { ProductHeader } from "@/components/product-header"
-import { getConsumerBorrows, getOperatorDashboard, syncAuthenticatedUser } from "@/lib/retray-data"
-
-import { requireChatGPTUser } from "../chatgpt-auth"
+import { getConsumerBorrows, getOperatorDashboard } from "@/lib/retray-data"
+import { requireUser } from "@/lib/auth-session"
 
 type ProductPageProps = {
   searchParams: Promise<{
@@ -15,26 +13,12 @@ type ProductPageProps = {
 }
 
 export default async function ProductPage(props: ProductPageProps) {
-  try {
-    return await renderProductPage(props)
-  } catch (error) {
-    console.error("ReTray product page failed", error)
-    throw error
-  }
+  return renderProductPage(props)
 }
 
 async function renderProductPage({ searchParams }: ProductPageProps) {
   const params = await searchParams
-  const identity = await requireChatGPTUser("/app")
-  const user = await syncAuthenticatedUser({
-    userId: identity.userId,
-    email: identity.email,
-    displayName: identity.displayName,
-  })
-
-  if (!user.accountType) {
-    return <AccountOnboarding displayName={user.displayName} />
-  }
+  const user = await requireUser()
 
   if (user.accountType === "business_operator") {
     const dashboard = await getOperatorDashboard(user, params.venue)

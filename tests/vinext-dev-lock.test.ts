@@ -23,7 +23,7 @@ test("Windows dev removes a lock whose reused PID belongs to a non-Vinext proces
     platform: "win32",
     root,
     readFile: () => lockFor(1972),
-    removeFile: (path) => removed.push(path),
+    removeFile: (path) => removed.push(String(path)),
     lookupProcess: () => ({
       name: "svchost.exe",
       commandLine: "C:\\WINDOWS\\system32\\svchost.exe -k netsvcs",
@@ -98,7 +98,7 @@ test("an explicit Vinext lock bypass is preserved", () => {
     command: "dev",
     platform: "win32",
     root,
-    env: { VINEXT_NO_DEV_LOCK: "1" },
+    env: { VINEXT_NO_DEV_LOCK: "1", NODE_ENV: "test" },
     readFile: () => {
       reads += 1;
       return lockFor(1972);

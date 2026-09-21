@@ -1,4 +1,3 @@
-import { chatGPTSignOutPath } from "@/app/chatgpt-auth"
 import { ReTrayMark } from "@/components/retray-mark"
 import Link from "next/link"
 
@@ -19,7 +18,7 @@ export function ProductHeader({ accountLabel, displayName, venueName }: ProductH
         {venueName ? <span>{venueName}</span> : null}
         <span>{accountLabel}</span>
         <strong>{displayName}</strong>
-        <a className="text-link" href={chatGPTSignOutPath("/")}>Sign out</a>
+        <form action="/api/auth/signout" method="post"><button className="text-link" type="submit">Sign out</button></form>
       </div>
     </header>
   )

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, sql } from "drizzle-orm"
 
 import { getDb } from "../db/index"
 import {
@@ -11,18 +11,12 @@ import {
 } from "../db/schema"
 import {
   assertConsumerAccess,
+  assertBorrowReturnAccess,
   assertVenueAccess,
   transitionContainer,
-  type AccountType,
   type CirculationEventType,
   type ContainerStatus,
 } from "./circulation-domain"
-
-export type AuthenticatedIdentity = {
-  userId: string
-  email: string
-  displayName: string
-}
 
 export type OperatorContainer = {
   id: string
@@ -30,6 +24,8 @@ export type OperatorContainer = {
   qrId: string
   status: ContainerStatus
   customer: string | null
+  depositMinor: number | null
+  depositStatus: "not_collected" | "return_recorded" | null
   latestEvent: CirculationEventType | null
   latestEventAt: string | null
   isDemo: boolean
@@ -50,6 +46,7 @@ export type OperatorDashboard = {
 export type ConsumerBorrow = {
   id: string
   containerLabel: string
+  qrId: string
   containerStatus: ContainerStatus
   venueName: string
   borrowStatus: "active" | "returned"
@@ -59,57 +56,6 @@ export type ConsumerBorrow = {
   issuedAt: string
   returnedAt: string | null
   isDemo: boolean
-}
-
-export async function syncAuthenticatedUser(
-  identity: AuthenticatedIdentity,
-): Promise<UserRecord> {
-  const db = await getDb()
-  await db
-    .insert(users)
-    .values({
-      id: identity.userId,
-      email: identity.email.toLowerCase(),
-      displayName: identity.displayName,
-    })
-    .onConflictDoNothing()
-
-  const [user] = await db.select().from(users).where(eq(users.id, identity.userId))
-  if (!user) {
-    throw new Error("The authenticated email is already linked to another account.")
-  }
-
-  if (
-    !user.isDemo &&
-    (user.email !== identity.email.toLowerCase() ||
-      user.displayName !== identity.displayName)
-  ) {
-    await db
-      .update(users)
-      .set({
-        email: identity.email.toLowerCase(),
-        displayName: identity.displayName,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(users.id, user.id))
-    return { ...user, email: identity.email.toLowerCase(), displayName: identity.displayName }
-  }
-
-  return user
-}
-
-export async function chooseAccountType(
-  user: UserRecord,
-  accountType: AccountType,
-): Promise<void> {
-  if (user.accountType && user.accountType !== accountType) {
-    throw new Error("Account type cannot be changed after onboarding.")
-  }
-  const db = await getDb()
-  await db
-    .update(users)
-    .set({ accountType, updatedAt: new Date().toISOString() })
-    .where(eq(users.id, user.id))
 }
 
 export async function createVenue(user: UserRecord, name: string): Promise<void> {
@@ -161,6 +107,7 @@ export async function applyCirculationEvent(input: {
   qrId: string
   eventType: CirculationEventType
   consumerEmail?: string
+  depositMinor?: number
 }): Promise<void> {
   requireOperator(input.user)
   const db = await getDb()
@@ -178,10 +125,14 @@ export async function applyCirculationEvent(input: {
   const timestamp = new Date().toISOString()
 
   if (input.eventType === "issued") {
+    const depositMinor = input.depositMinor ?? 0
+    if (!Number.isSafeInteger(depositMinor) || depositMinor < 0 || depositMinor > 999_999) {
+      throw new Error("Enter a valid expected deposit.")
+    }
     const email = input.consumerEmail?.trim().toLowerCase() ?? ""
     const [consumer] = await db.select().from(users).where(eq(users.email, email))
     if (!consumer || consumer.accountType !== "consumer") {
-      throw new Error("The consumer must sign in and choose a consumer account first.")
+      throw new Error("The consumer must create a consumer account first.")
     }
     const borrowId = crypto.randomUUID()
     await db.batch([
@@ -199,9 +150,10 @@ export async function applyCirculationEvent(input: {
         containerId: container.id,
         consumerUserId: consumer.id,
         issuedByUserId: input.user.id,
-        depositMinor: 300,
+        depositMinor,
         depositCurrency: "EUR",
         depositStatus: "not_collected",
+        issuedAt: timestamp,
       }),
       db.insert(circulationEvents).values({
         id: crypto.randomUUID(),
@@ -210,6 +162,7 @@ export async function applyCirculationEvent(input: {
         borrowId,
         actorUserId: input.user.id,
         eventType: input.eventType,
+        occurredAt: timestamp,
       }),
     ])
     return
@@ -239,6 +192,7 @@ export async function applyCirculationEvent(input: {
     borrowId: latestBorrow.id,
     actorUserId: input.user.id,
     eventType: input.eventType,
+    occurredAt: timestamp,
   })
   if (input.eventType === "returned") {
     if (latestBorrow.status !== "active") {
@@ -259,6 +213,28 @@ export async function applyCirculationEvent(input: {
     return
   }
   await db.batch([updateContainer, insertEvent])
+}
+
+export async function returnBorrowedContainer(user: UserRecord, qrId: string): Promise<void> {
+  requireConsumer(user)
+  const db = await getDb()
+  const [active] = await db
+    .select({ borrow: borrows, container: containers })
+    .from(borrows)
+    .innerJoin(containers, eq(borrows.containerId, containers.id))
+    .where(and(eq(containers.qrId, qrId.trim()), eq(borrows.status, "active")))
+  if (!active) throw new Error("No active borrow matches that QR ID.")
+  assertBorrowReturnAccess({ id: user.id, accountType: user.accountType }, active.borrow.consumerUserId, active.borrow.status)
+  const nextStatus = transitionContainer(active.container.status as ContainerStatus, "returned")
+  const timestamp = new Date().toISOString()
+  await db.batch([
+    db.update(containers).set({ status: nextStatus, updatedAt: timestamp }).where(and(eq(containers.id, active.container.id), eq(containers.status, "borrowed"))),
+    db.update(borrows).set({ status: "returned", depositStatus: "return_recorded", returnedAt: timestamp }).where(and(eq(borrows.id, active.borrow.id), eq(borrows.status, "active"))),
+    db.insert(circulationEvents).values({
+      id: crypto.randomUUID(), venueId: active.container.venueId, containerId: active.container.id,
+      borrowId: active.borrow.id, actorUserId: user.id, eventType: "returned", occurredAt: timestamp,
+    }),
+  ])
 }
 
 export async function getOperatorDashboard(
@@ -297,25 +273,24 @@ export async function getOperatorDashboard(
       .select({
         containerId: borrows.containerId,
         consumerName: users.displayName,
+        depositMinor: borrows.depositMinor,
+        depositStatus: borrows.depositStatus,
       })
       .from(borrows)
       .innerJoin(users, eq(borrows.consumerUserId, users.id))
       .innerJoin(containers, eq(borrows.containerId, containers.id))
-      .where(
-        and(
-          eq(borrows.status, "active"),
-          eq(containers.venueId, venue.id),
-        ),
-      ),
+      .where(eq(containers.venueId, venue.id))
+      .orderBy(desc(borrows.issuedAt)),
     db
       .select()
       .from(circulationEvents)
       .where(eq(circulationEvents.venueId, venue.id))
-      .orderBy(desc(circulationEvents.occurredAt)),
+      .orderBy(desc(sql`julianday(${circulationEvents.occurredAt})`), desc(sql`rowid`)),
   ])
-  const customerByContainer = new Map(
-    borrowRows.map((row) => [row.containerId, row.consumerName]),
-  )
+  const borrowByContainer = new Map<string, (typeof borrowRows)[number]>()
+  for (const row of borrowRows) {
+    if (!borrowByContainer.has(row.containerId)) borrowByContainer.set(row.containerId, row)
+  }
   const latestByContainer = new Map<
     string,
     (typeof eventRows)[number]
@@ -332,7 +307,9 @@ export async function getOperatorDashboard(
       label: container.label,
       qrId: container.qrId,
       status: container.status as ContainerStatus,
-      customer: customerByContainer.get(container.id) ?? null,
+      customer: container.status === "borrowed" ? borrowByContainer.get(container.id)?.consumerName ?? null : null,
+      depositMinor: borrowByContainer.get(container.id)?.depositMinor ?? null,
+      depositStatus: borrowByContainer.get(container.id)?.depositStatus ?? null,
       latestEvent: (latest?.eventType as CirculationEventType | undefined) ?? null,
       latestEventAt: latest?.occurredAt ?? null,
       isDemo: container.isDemo,
@@ -367,6 +344,7 @@ export async function getConsumerBorrows(
     .select({
       id: borrows.id,
       containerLabel: containers.label,
+      qrId: containers.qrId,
       containerStatus: containers.status,
       venueName: venues.name,
       borrowStatus: borrows.status,

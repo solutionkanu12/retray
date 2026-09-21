@@ -8,6 +8,20 @@ CREATE TABLE IF NOT EXISTS users (
   created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL,
   updated_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+CREATE TABLE IF NOT EXISTS credentials (
+  user_id text PRIMARY KEY NOT NULL REFERENCES users(id),
+  password_hash text NOT NULL,
+  password_salt text NOT NULL,
+  password_iterations integer NOT NULL,
+  created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  token_digest text PRIMARY KEY NOT NULL,
+  user_id text NOT NULL REFERENCES users(id),
+  expires_at text NOT NULL,
+  created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
 CREATE TABLE IF NOT EXISTS venues (
   id text PRIMARY KEY NOT NULL,
   owner_user_id text NOT NULL REFERENCES users(id),
@@ -55,6 +69,7 @@ CREATE TABLE IF NOT EXISTS circulation_events (
 );
 CREATE INDEX IF NOT EXISTS circulation_events_venue_time_idx ON circulation_events (venue_id, occurred_at);
 CREATE INDEX IF NOT EXISTS circulation_events_container_time_idx ON circulation_events (container_id, occurred_at);
+CREATE UNIQUE INDEX IF NOT EXISTS circulation_events_one_type_per_borrow ON circulation_events (borrow_id, event_type);
 CREATE TRIGGER IF NOT EXISTS circulation_events_no_update
 BEFORE UPDATE ON circulation_events
 BEGIN
@@ -65,29 +80,6 @@ BEFORE DELETE ON circulation_events
 BEGIN
   SELECT RAISE(ABORT, 'circulation events are immutable');
 END;
-INSERT OR IGNORE INTO users (id, email, display_name, account_type, is_demo)
-VALUES
-  ('local_seedy', 'seedy@sites.test', 'Jordan Kim', 'business_operator', true),
-  ('demo_maya', 'maya.demo@retray.local', 'Maya L.', 'consumer', true);
-INSERT OR IGNORE INTO venues (id, owner_user_id, name, is_demo)
-VALUES ('demo_kora_kitchen', 'local_seedy', 'Kora Kitchen', true);
-INSERT OR IGNORE INTO containers (id, venue_id, label, qr_id, status, is_demo)
-VALUES ('demo_rt_024', 'demo_kora_kitchen', 'RT-024', 'RT024DEMO001', 'borrowed', true);
-INSERT OR IGNORE INTO borrows (
-  id, container_id, consumer_user_id, issued_by_user_id, status,
-  deposit_minor, deposit_currency, deposit_status, is_demo
-)
-VALUES (
-  'demo_borrow_rt_024', 'demo_rt_024', 'demo_maya', 'local_seedy', 'active',
-  300, 'EUR', 'not_collected', true
-);
-INSERT OR IGNORE INTO circulation_events (
-  id, venue_id, container_id, borrow_id, actor_user_id, event_type
-)
-VALUES (
-  'demo_event_rt_024_issued', 'demo_kora_kitchen', 'demo_rt_024',
-  'demo_borrow_rt_024', 'local_seedy', 'issued'
-);
 `
 
 let initialization: Promise<void> | undefined

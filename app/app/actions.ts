@@ -2,29 +2,21 @@
 
 import { redirect } from "next/navigation"
 
-import { requireChatGPTUser } from "../chatgpt-auth"
-import type { AccountType, CirculationEventType } from "../../lib/circulation-domain"
+import { currentUser } from "../../lib/auth-session"
+import { parseExpectedDeposit } from "../../lib/deposit"
+import type { CirculationEventType } from "../../lib/circulation-domain"
 import {
   applyCirculationEvent,
-  chooseAccountType,
   createVenue,
   registerContainer,
   renameVenue,
-  syncAuthenticatedUser,
+  returnBorrowedContainer,
 } from "../../lib/retray-data"
-
-export async function chooseAccountTypeAction(formData: FormData): Promise<void> {
-  const accountType = formData.get("accountType")
-  if (accountType !== "business_operator" && accountType !== "consumer") {
-    redirect(withMessage("error", "Choose a valid account type."))
-  }
-  await runAction(() => chooseAccountTypeForCurrentUser(accountType))
-}
 
 export async function createVenueAction(formData: FormData): Promise<void> {
   const name = stringField(formData, "name")
   await runAction(async () => {
-    const user = await currentUser()
+    const user = await actionUser()
     await createVenue(user, name)
   }, "Venue created.")
 }
@@ -33,7 +25,7 @@ export async function renameVenueAction(formData: FormData): Promise<void> {
   const venueId = stringField(formData, "venueId")
   const name = stringField(formData, "name")
   await runAction(async () => {
-    const user = await currentUser()
+    const user = await actionUser()
     await renameVenue(user, venueId, name)
   }, "Venue name updated.", venueId)
 }
@@ -42,7 +34,7 @@ export async function registerContainerAction(formData: FormData): Promise<void>
   const venueId = stringField(formData, "venueId")
   const label = stringField(formData, "label")
   await runAction(async () => {
-    const user = await currentUser()
+    const user = await actionUser()
     await registerContainer(user, venueId, label)
   }, "Container registered.", venueId)
 }
@@ -55,26 +47,25 @@ export async function circulationAction(formData: FormData): Promise<void> {
     redirect(withMessage("error", "Choose a valid circulation action.", venueId))
   }
   const consumerEmail = stringField(formData, "consumerEmail", false)
+  const depositAmount = stringField(formData, "depositAmount", false)
   await runAction(async () => {
-    const user = await currentUser()
-    await applyCirculationEvent({ user, qrId, eventType, consumerEmail })
+    const user = await actionUser()
+    await applyCirculationEvent({ user, qrId, eventType, consumerEmail, depositMinor: parseExpectedDeposit(depositAmount) })
   }, actionNotice(eventType), venueId)
 }
 
-async function chooseAccountTypeForCurrentUser(
-  accountType: AccountType,
-): Promise<void> {
-  const user = await currentUser()
-  await chooseAccountType(user, accountType)
+export async function consumerReturnAction(formData: FormData): Promise<void> {
+  const qrId = stringField(formData, "qrId")
+  await runAction(async () => {
+    const user = await actionUser()
+    await returnBorrowedContainer(user, qrId)
+  }, "Return recorded. No payment was moved.")
 }
 
-async function currentUser() {
-  const identity = await requireChatGPTUser("/app")
-  return syncAuthenticatedUser({
-    userId: identity.userId,
-    email: identity.email,
-    displayName: identity.displayName,
-  })
+async function actionUser() {
+  const user = await currentUser()
+  if (!user) throw new Error("Sign in to continue.")
+  return user
 }
 
 async function runAction(
