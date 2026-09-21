@@ -2,7 +2,7 @@ import { ConsumerDashboard } from "@/components/consumer-dashboard"
 import { OperatorDashboard } from "@/components/operator-dashboard"
 import { ProductHeader } from "@/components/product-header"
 import { getConsumerBorrows, getOperatorDashboard } from "@/lib/retray-data"
-import { requireUser } from "@/lib/auth-session"
+import { requireVerifiedUser } from "@/lib/auth-session"
 
 type ProductPageProps = {
   searchParams: Promise<{
@@ -18,7 +18,7 @@ export default async function ProductPage(props: ProductPageProps) {
 
 async function renderProductPage({ searchParams }: ProductPageProps) {
   const params = await searchParams
-  const user = await requireUser()
+  const user = await requireVerifiedUser()
 
   if (user.accountType === "business_operator") {
     const dashboard = await getOperatorDashboard(user, params.venue)

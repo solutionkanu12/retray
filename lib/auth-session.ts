@@ -14,3 +14,9 @@ export async function requireUser() {
   if (!user) redirect("/sign-in")
   return user
 }
+
+export async function requireVerifiedUser() {
+  const user = await requireUser()
+  if (!user.emailVerifiedAt) redirect("/verify")
+  return user
+}

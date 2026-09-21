@@ -7,3 +7,10 @@ export function isSameOriginRequest(request: Request): boolean {
     return false
   }
 }
+
+export function requestClientIdentity(request: Request): string {
+  const connecting = request.headers.get("cf-connecting-ip")?.trim()
+  if (connecting) return connecting
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+  return forwarded || "unknown"
+}

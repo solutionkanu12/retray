@@ -1,9 +1,21 @@
-import { mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const runtimeRoot = process.env.SITES_RUNTIME_ROOT || path.join(projectRoot, ".sites-runtime");
+
+export function localWorkerSecretsPath(root = projectRoot) {
+  return path.join(root, "dist/server/.dev.vars");
+}
+
+export function syncLocalWorkerSecrets(root = projectRoot) {
+  const source = path.join(root, ".dev.vars");
+  const destination = localWorkerSecretsPath(root);
+  if (!existsSync(source) || !existsSync(path.dirname(destination))) return false;
+  copyFileSync(source, destination);
+  return true;
+}
 
 process.env.CLOUDFLARE_CF_FETCH_ENABLED ||= "false";
 process.env.WRANGLER_SEND_METRICS ||= "false";
@@ -20,3 +32,4 @@ for (const directory of [
 ]) {
   mkdirSync(directory, { recursive: true });
 }
+syncLocalWorkerSecrets();

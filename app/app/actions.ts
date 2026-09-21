@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation"
 
+import { VERIFY_EMAIL_REQUIRED } from "../../lib/auth-email"
 import { currentUser } from "../../lib/auth-session"
 import { parseExpectedDeposit } from "../../lib/deposit"
 import type { CirculationEventType } from "../../lib/circulation-domain"
@@ -65,6 +66,7 @@ export async function consumerReturnAction(formData: FormData): Promise<void> {
 async function actionUser() {
   const user = await currentUser()
   if (!user) throw new Error("Sign in to continue.")
+  if (!user.emailVerifiedAt) throw new Error(VERIFY_EMAIL_REQUIRED)
   return user
 }
 
