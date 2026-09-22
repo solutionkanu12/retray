@@ -7,6 +7,7 @@ import {
   containers,
   paymentAttempts,
   processedWebhookEvents,
+  refunds,
   users,
   venues,
   type UserRecord,
@@ -16,11 +17,16 @@ import { readProviderConfig } from "./provider-config"
 import {
   assertConsumerMayInitializePayment,
   applyPaystackChargeSuccess,
+  applyPaystackRefundOutcome,
+  assertBusinessMayRequestRefund,
+  createPendingRefund,
   createPaymentAttemptDraft,
   paystackInitializeBody,
   type DepositStatus,
+  type RefundStatus,
 } from "./payment-domain"
 import {
+  createPaystackRefund,
   initializePaystackCheckout,
   parsePaystackWebhook,
   paystackEventDigest,
@@ -44,6 +50,10 @@ export type OperatorContainer = {
   depositMinor: number | null
   depositCurrency: string | null
   depositStatus: DepositStatus | null
+  borrowId: string | null
+  borrowStatus: "active" | "returned" | null
+  paymentStatus: "none" | "pending" | "paid" | "failed"
+  refundStatus: "none" | RefundStatus
   latestEvent: CirculationEventType | null
   latestEventAt: string | null
   isDemo: boolean
@@ -72,6 +82,7 @@ export type ConsumerBorrow = {
   depositCurrency: string
   depositStatus: DepositStatus
   paymentStatus: "none" | "pending" | "paid" | "failed"
+  refundStatus: "none" | RefundStatus
   issuedAt: string
   returnedAt: string | null
   isDemo: boolean
@@ -223,7 +234,7 @@ export async function applyCirculationEvent(input: {
         .update(borrows)
         .set({
           status: "returned",
-          depositStatus: "return_recorded",
+          depositStatus: latestBorrow.depositStatus === "paid" ? "paid" : "return_recorded",
           returnedAt: timestamp,
         })
         .where(eq(borrows.id, latestBorrow.id)),
@@ -248,7 +259,7 @@ export async function returnBorrowedContainer(user: UserRecord, qrId: string): P
   const timestamp = new Date().toISOString()
   await db.batch([
     db.update(containers).set({ status: nextStatus, updatedAt: timestamp }).where(and(eq(containers.id, active.container.id), eq(containers.status, "borrowed"))),
-    db.update(borrows).set({ status: "returned", depositStatus: "return_recorded", returnedAt: timestamp }).where(and(eq(borrows.id, active.borrow.id), eq(borrows.status, "active"))),
+    db.update(borrows).set({ status: "returned", depositStatus: active.borrow.depositStatus === "paid" ? "paid" : "return_recorded", returnedAt: timestamp }).where(and(eq(borrows.id, active.borrow.id), eq(borrows.status, "active"))),
     db.insert(circulationEvents).values({
       id: crypto.randomUUID(), venueId: active.container.venueId, containerId: active.container.id,
       borrowId: active.borrow.id, actorUserId: user.id, eventType: "returned", occurredAt: timestamp,
@@ -290,15 +301,21 @@ export async function getOperatorDashboard(
       .orderBy(containers.createdAt),
     db
       .select({
+        borrowId: borrows.id,
         containerId: borrows.containerId,
+        borrowStatus: borrows.status,
         consumerName: users.displayName,
         depositMinor: borrows.depositMinor,
         depositCurrency: borrows.depositCurrency,
         depositStatus: borrows.depositStatus,
+        paymentStatus: paymentAttempts.status,
+        refundStatus: refunds.status,
       })
       .from(borrows)
       .innerJoin(users, eq(borrows.consumerUserId, users.id))
       .innerJoin(containers, eq(borrows.containerId, containers.id))
+      .leftJoin(paymentAttempts, eq(paymentAttempts.borrowId, borrows.id))
+      .leftJoin(refunds, eq(refunds.paymentAttemptId, paymentAttempts.id))
       .where(eq(containers.venueId, venue.id))
       .orderBy(desc(borrows.issuedAt)),
     db
@@ -322,15 +339,20 @@ export async function getOperatorDashboard(
   }
   const dashboardContainers = containerRows.map((container) => {
     const latest = latestByContainer.get(container.id)
+    const borrow = borrowByContainer.get(container.id)
     return {
       id: container.id,
       label: container.label,
       qrId: container.qrId,
       status: container.status as ContainerStatus,
-      customer: container.status === "borrowed" ? borrowByContainer.get(container.id)?.consumerName ?? null : null,
-      depositMinor: borrowByContainer.get(container.id)?.depositMinor ?? null,
-      depositCurrency: borrowByContainer.get(container.id)?.depositCurrency ?? null,
-      depositStatus: (borrowByContainer.get(container.id)?.depositStatus as DepositStatus | undefined) ?? null,
+      customer: container.status === "borrowed" ? borrow?.consumerName ?? null : null,
+      depositMinor: borrow?.depositMinor ?? null,
+      depositCurrency: borrow?.depositCurrency ?? null,
+      depositStatus: (borrow?.depositStatus as DepositStatus | undefined) ?? null,
+      borrowId: borrow?.borrowId ?? null,
+      borrowStatus: (borrow?.borrowStatus as "active" | "returned" | undefined) ?? null,
+      paymentStatus: ((borrow?.paymentStatus as "pending" | "paid" | "failed" | null | undefined) ?? "none") as "none" | "pending" | "paid" | "failed",
+      refundStatus: ((borrow?.refundStatus as RefundStatus | null | undefined) ?? "none") as "none" | RefundStatus,
       latestEvent: (latest?.eventType as CirculationEventType | undefined) ?? null,
       latestEventAt: latest?.occurredAt ?? null,
       isDemo: container.isDemo,
@@ -384,6 +406,7 @@ export async function getConsumerBorrows(
   const payments = rows.length
     ? await db
       .select({
+        id: paymentAttempts.id,
         borrowId: paymentAttempts.borrowId,
         status: paymentAttempts.status,
         createdAt: paymentAttempts.createdAt,
@@ -393,13 +416,30 @@ export async function getConsumerBorrows(
       .orderBy(desc(paymentAttempts.createdAt))
     : []
   const paymentByBorrow = new Map<string, "pending" | "paid" | "failed">()
+  const paymentIdByBorrow = new Map<string, string>()
   for (const payment of payments) {
-    if (!paymentByBorrow.has(payment.borrowId)) paymentByBorrow.set(payment.borrowId, payment.status)
+    if (!paymentByBorrow.has(payment.borrowId)) {
+      paymentByBorrow.set(payment.borrowId, payment.status)
+      paymentIdByBorrow.set(payment.borrowId, payment.id)
+    }
+  }
+  const consumerRefunds = rows.length
+    ? await db
+      .select({ paymentAttemptId: refunds.paymentAttemptId, status: refunds.status, createdAt: refunds.createdAt })
+      .from(refunds)
+      .innerJoin(paymentAttempts, eq(refunds.paymentAttemptId, paymentAttempts.id))
+      .where(eq(paymentAttempts.consumerUserId, user.id))
+      .orderBy(desc(refunds.createdAt))
+    : []
+  const refundByPaymentId = new Map<string, RefundStatus>()
+  for (const refund of consumerRefunds) {
+    if (!refundByPaymentId.has(refund.paymentAttemptId)) refundByPaymentId.set(refund.paymentAttemptId, refund.status as RefundStatus)
   }
   return rows.map((row) => ({
     ...row,
     depositStatus: row.depositStatus as DepositStatus,
     paymentStatus: paymentByBorrow.get(row.id) ?? "none",
+    refundStatus: refundByPaymentId.get(paymentIdByBorrow.get(row.id) ?? "") ?? "none",
   }))
 }
 
@@ -444,7 +484,7 @@ export async function initializeDepositCheckout(
     providerReference: draft.providerReference,
     status: draft.status,
     amountMinor: draft.amountMinor,
-    currency: draft.currency,
+    currency: NEW_DEPOSIT_CURRENCY,
   })
   const authorizationUrl = await initializePaystackCheckout({
     source,
@@ -461,6 +501,82 @@ export async function initializeDepositCheckout(
   return authorizationUrl
 }
 
+export async function requestDepositRefund(
+  user: UserRecord,
+  borrowId: string,
+  source: Record<string, unknown>,
+): Promise<"requested" | "already_requested"> {
+  requireOperator(user)
+  const db = await getDb()
+  const [row] = await db
+    .select({ borrow: borrows, venue: venues, payment: paymentAttempts })
+    .from(borrows)
+    .innerJoin(containers, eq(borrows.containerId, containers.id))
+    .innerJoin(venues, eq(containers.venueId, venues.id))
+    .innerJoin(paymentAttempts, and(eq(paymentAttempts.borrowId, borrows.id), eq(paymentAttempts.status, "paid")))
+    .where(eq(borrows.id, borrowId))
+  if (!row) throw new Error("Paid deposit not found.")
+  assertBusinessMayRequestRefund(
+    { id: user.id, accountType: user.accountType },
+    {
+      venueOwnerUserId: row.venue.ownerUserId,
+      borrowStatus: row.borrow.status,
+      depositStatus: row.borrow.depositStatus as DepositStatus,
+      payment: {
+        id: row.payment.id,
+        providerReference: row.payment.providerReference,
+        status: row.payment.status as "pending" | "paid" | "failed",
+        amountMinor: row.payment.amountMinor,
+        currency: row.payment.currency,
+      },
+    },
+  )
+  const [existing] = await db.select().from(refunds).where(eq(refunds.paymentAttemptId, row.payment.id))
+  if (existing) return "already_requested"
+  const pending = createPendingRefund({
+    refundable: {
+      venueOwnerUserId: row.venue.ownerUserId,
+      borrowStatus: row.borrow.status,
+      depositStatus: row.borrow.depositStatus as DepositStatus,
+      payment: {
+        id: row.payment.id,
+        providerReference: row.payment.providerReference,
+        status: row.payment.status as "pending" | "paid" | "failed",
+        amountMinor: row.payment.amountMinor,
+        currency: row.payment.currency,
+      },
+    },
+    refund: null,
+    processedEventDigests: [],
+  })
+  const draft = pending.ledger.refund!
+  try {
+    await db.insert(refunds).values({
+      id: draft.id,
+      paymentAttemptId: draft.paymentAttemptId,
+      borrowId: row.borrow.id,
+      status: draft.status,
+      amountMinor: draft.amountMinor,
+      currency: NEW_DEPOSIT_CURRENCY,
+    })
+  } catch {
+    const [concurrentRefund] = await db.select().from(refunds).where(eq(refunds.paymentAttemptId, row.payment.id))
+    if (concurrentRefund) return "already_requested"
+    throw new Error("Refund record could not be saved.")
+  }
+  const providerRefund = await createPaystackRefund({
+    source,
+    transactionReference: row.payment.providerReference,
+    amount: draft.amountMinor,
+    currency: NEW_DEPOSIT_CURRENCY,
+  })
+  await db
+    .update(refunds)
+    .set({ providerReference: providerRefund.providerReference, updatedAt: new Date().toISOString() })
+    .where(eq(refunds.id, draft.id))
+  return "requested"
+}
+
 export async function applyPaystackWebhook(
   rawBody: string,
   signature: string,
@@ -473,6 +589,9 @@ export async function applyPaystackWebhook(
   const event = parsePaystackWebhook(rawBody)
   if (!event) return "ignored"
   const digest = await paystackEventDigest(rawBody)
+  if (event.event === "refund.processed" || event.event === "refund.failed") {
+    return applyPaystackRefundWebhook(event, digest)
+  }
   const reference = event.data?.reference
   if (!reference) return "ignored"
   const db = await getDb()
@@ -518,6 +637,72 @@ export async function applyPaystackWebhook(
     ])
   }
   return applied.duplicate ? "duplicate" : "accepted"
+}
+
+async function applyPaystackRefundWebhook(
+  event: NonNullable<ReturnType<typeof parsePaystackWebhook>>,
+  digest: string,
+): Promise<"accepted" | "duplicate" | "ignored"> {
+  const transactionReference = event.data?.transaction_reference
+  if (!transactionReference) return "ignored"
+  const db = await getDb()
+  const [row] = await db
+    .select({ attempt: paymentAttempts, borrow: borrows, venue: venues, refund: refunds })
+    .from(paymentAttempts)
+    .innerJoin(borrows, eq(paymentAttempts.borrowId, borrows.id))
+    .innerJoin(containers, eq(borrows.containerId, containers.id))
+    .innerJoin(venues, eq(containers.venueId, venues.id))
+    .innerJoin(refunds, eq(refunds.paymentAttemptId, paymentAttempts.id))
+    .where(eq(paymentAttempts.providerReference, transactionReference))
+  if (!row) return "ignored"
+  const [existing] = await db.select().from(processedWebhookEvents).where(eq(processedWebhookEvents.eventDigest, digest))
+  const applied = applyPaystackRefundOutcome(
+    {
+      refundable: {
+        venueOwnerUserId: row.venue.ownerUserId,
+        borrowStatus: row.borrow.status,
+        depositStatus: row.borrow.depositStatus as DepositStatus,
+        payment: {
+          id: row.attempt.id,
+          providerReference: row.attempt.providerReference,
+          status: row.attempt.status as "pending" | "paid" | "failed",
+          amountMinor: row.attempt.amountMinor,
+          currency: row.attempt.currency,
+        },
+      },
+      refund: {
+        id: row.refund.id,
+        paymentAttemptId: row.refund.paymentAttemptId,
+        providerReference: row.refund.providerReference,
+        status: row.refund.status as RefundStatus,
+        amountMinor: row.refund.amountMinor,
+        currency: row.refund.currency,
+      },
+      processedEventDigests: existing ? [digest] : [],
+    },
+    event,
+    digest,
+  )
+  if (!applied) return "ignored"
+  if (applied.duplicate && existing) return "duplicate"
+  if (!existing) {
+    await db.insert(processedWebhookEvents).values({
+      eventDigest: digest,
+      paymentAttemptId: row.attempt.id,
+      eventType: event.event ?? "refund.processed",
+    })
+  }
+  if (applied.duplicate) return "duplicate"
+  const timestamp = new Date().toISOString()
+  if (applied.ledger.refund?.status === "refunded") {
+    await db.batch([
+      db.update(refunds).set({ status: "refunded", updatedAt: timestamp }).where(eq(refunds.id, row.refund.id)),
+      db.update(borrows).set({ depositStatus: "refunded" }).where(eq(borrows.id, row.borrow.id)),
+    ])
+  } else if (applied.ledger.refund?.status === "failed") {
+    await db.update(refunds).set({ status: "failed", updatedAt: timestamp }).where(eq(refunds.id, row.refund.id))
+  }
+  return "accepted"
 }
 
 async function requireOwnedVenue(user: UserRecord, venueId: string) {

@@ -60,15 +60,56 @@ export async function initializePaystackCheckout(input: {
   return url
 }
 
-export function parsePaystackWebhook(rawBody: string): {
-  event?: string
-  data?: { id?: number | string; reference?: string; amount?: number; currency?: string; status?: string }
-} | null {
+export async function createPaystackRefund(input: {
+  source: Record<string, unknown>
+  transactionReference: string
+  amount: number
+  currency: "NGN"
+  fetchImpl?: typeof fetch
+}): Promise<{ providerReference: string; status: "pending" }> {
+  const secret = readProviderConfig(input.source, "PAYSTACK_SECRET_KEY")
+  const fetchImpl = input.fetchImpl ?? fetch
+  let response: Response
   try {
-    const parsed = JSON.parse(rawBody) as {
-      event?: string
-      data?: { id?: number | string; reference?: string; amount?: number; currency?: string; status?: string }
-    }
+    response = await fetchImpl("https://api.paystack.co/refund", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${secret}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        transaction: input.transactionReference,
+        amount: input.amount,
+        currency: input.currency,
+      }),
+    })
+  } catch {
+    throw new Error("Paystack test refund could not be requested.")
+  }
+  const payload = await response.json().catch(() => null) as { status?: boolean; data?: { id?: number | string } } | null
+  const providerReference = payload?.data?.id
+  if (!response.ok || !payload?.status || (typeof providerReference !== "number" && typeof providerReference !== "string")) {
+    throw new Error("Paystack test refund could not be requested.")
+  }
+  return { providerReference: String(providerReference), status: "pending" }
+}
+
+export type PaystackWebhookEvent = {
+  event?: string
+  data?: {
+    id?: number | string
+    reference?: string
+    transaction_reference?: string
+    refund_reference?: string | number | null
+    amount?: number | string
+    currency?: string
+    status?: string
+  }
+}
+
+export function parsePaystackWebhook(rawBody: string): PaystackWebhookEvent | null {
+  try {
+    const parsed = JSON.parse(rawBody) as PaystackWebhookEvent
     return parsed && typeof parsed === "object" ? parsed : null
   } catch {
     return null

@@ -70,6 +70,9 @@ function BorrowRow({ borrow }: { borrow: ConsumerBorrow }) {
 }
 
 function depositNote(borrow: ConsumerBorrow): string {
+  if (borrow.depositStatus === "refunded") return "Paystack test refund recorded. This is test money, not a live payment."
+  if (borrow.refundStatus === "pending") return "Paystack test refund requested. Waiting for a verified provider outcome. This is test money, not a live payment."
+  if (borrow.refundStatus === "failed") return "Paystack test refund did not complete. This is test money, not a live payment."
   if (borrow.depositStatus === "paid") return "Paystack test payment recorded. This is test money, not a live payment."
   if (borrow.depositStatus === "return_recorded") return "Return recorded. No payment moved."
   if (borrow.paymentStatus === "pending") return "Paystack test checkout started. Waiting for a verified webhook. The browser return does not mark this paid."

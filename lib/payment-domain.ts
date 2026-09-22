@@ -1,9 +1,11 @@
 import { NEW_DEPOSIT_CURRENCY } from "./deposit.ts"
-import { assertConsumerAccess, type AccessIdentity } from "./circulation-domain.ts"
+import { assertConsumerAccess, assertVenueAccess, type AccessIdentity } from "./circulation-domain.ts"
 
-export type DepositStatus = "not_collected" | "paid" | "return_recorded"
+export type DepositStatus = "not_collected" | "paid" | "refunded" | "return_recorded"
 
 export type PaymentAttemptStatus = "pending" | "paid" | "failed"
+
+export type RefundStatus = "pending" | "refunded" | "failed"
 
 export type PayableBorrow = {
   consumerUserId: string
@@ -95,7 +97,7 @@ export function applyPaystackChargeSuccess(
   ledger: PaymentLedger,
   event: {
     event?: string
-    data?: { id?: number | string; reference?: string; amount?: number; currency?: string; status?: string }
+    data?: { id?: number | string; reference?: string; amount?: number | string; currency?: string; status?: string }
   },
   eventDigest: string,
 ): { ledger: PaymentLedger; duplicate: boolean } | null {
@@ -104,7 +106,7 @@ export function applyPaystackChargeSuccess(
   }
   if (event.event !== "charge.success" || event.data?.status !== "success") return null
   if (event.data.reference !== ledger.attempt.providerReference) return null
-  if (event.data.amount !== ledger.attempt.amountMinor) return null
+  if (Number(event.data.amount) !== ledger.attempt.amountMinor) return null
   if (event.data.currency !== ledger.attempt.currency) return null
   if (ledger.attempt.currency !== NEW_DEPOSIT_CURRENCY) return null
   if (ledger.attempt.status === "paid" && ledger.deposit.status === "paid") {
@@ -121,6 +123,116 @@ export function applyPaystackChargeSuccess(
     ledger: {
       attempt: { ...ledger.attempt, status: "paid" },
       deposit: { ...ledger.deposit, status: "paid" },
+      processedEventDigests: [...ledger.processedEventDigests, eventDigest],
+    },
+  }
+}
+
+export type RefundablePayment = {
+  venueOwnerUserId: string
+  borrowStatus: "active" | "returned"
+  depositStatus: DepositStatus
+  payment: {
+    id: string
+    providerReference: string
+    status: PaymentAttemptStatus
+    amountMinor: number
+    currency: string
+  }
+}
+
+export type RefundRecord = {
+  id: string
+  paymentAttemptId: string
+  providerReference: string | null
+  status: RefundStatus
+  amountMinor: number
+  currency: string
+}
+
+export type RefundLedger = {
+  refundable: RefundablePayment
+  refund: RefundRecord | null
+  processedEventDigests: string[]
+}
+
+export function assertBusinessMayRequestRefund(user: AccessIdentity, refundable: RefundablePayment): void {
+  assertVenueAccess(user, refundable.venueOwnerUserId)
+  if (refundable.depositStatus !== "paid" || refundable.payment.status !== "paid") {
+    throw new Error("Only a paid deposit can be refunded.")
+  }
+  if (refundable.borrowStatus !== "returned") {
+    throw new Error("The issued container must be returned before its deposit can be refunded.")
+  }
+  if (refundable.payment.currency !== NEW_DEPOSIT_CURRENCY) {
+    throw new Error("Paystack test-mode refunds are only available for NGN deposits.")
+  }
+}
+
+export function createPendingRefund(ledger: RefundLedger): { ledger: RefundLedger; created: boolean } {
+  if (ledger.refund) return { ledger, created: false }
+  const { payment } = ledger.refundable
+  return {
+    created: true,
+    ledger: {
+      ...ledger,
+      refund: {
+        id: `refund_${crypto.randomUUID().replaceAll("-", "")}`,
+        paymentAttemptId: payment.id,
+        providerReference: null,
+        status: "pending",
+        amountMinor: payment.amountMinor,
+        currency: NEW_DEPOSIT_CURRENCY,
+      },
+    },
+  }
+}
+
+export function applyBrowserRefundResponse(ledger: RefundLedger): RefundLedger {
+  return ledger
+}
+
+export function applyPaystackRefundOutcome(
+  ledger: RefundLedger,
+  event: {
+    event?: string
+    data?: {
+      transaction_reference?: string
+      refund_reference?: string | number | null
+      amount?: string | number
+      currency?: string
+      status?: string
+    }
+  },
+  eventDigest: string,
+): { ledger: RefundLedger; duplicate: boolean } | null {
+  if (ledger.processedEventDigests.includes(eventDigest)) return { ledger, duplicate: true }
+  const refund = ledger.refund
+  const data = event.data
+  if (!refund || !data) return null
+  if (data.transaction_reference !== ledger.refundable.payment.providerReference) return null
+  if (Number(data.amount) !== refund.amountMinor || data.currency !== refund.currency) return null
+  const status = event.event === "refund.processed" && data.status === "processed"
+    ? "refunded"
+    : event.event === "refund.failed" && data.status === "failed"
+      ? "failed"
+      : null
+  if (!status) return null
+  if (refund.status !== "pending") {
+    return {
+      duplicate: true,
+      ledger: { ...ledger, processedEventDigests: [...ledger.processedEventDigests, eventDigest] },
+    }
+  }
+  return {
+    duplicate: false,
+    ledger: {
+      ...ledger,
+      refundable: {
+        ...ledger.refundable,
+        depositStatus: status === "refunded" ? "refunded" : ledger.refundable.depositStatus,
+      },
+      refund: { ...refund, status },
       processedEventDigests: [...ledger.processedEventDigests, eventDigest],
     },
   }

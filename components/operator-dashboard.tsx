@@ -4,6 +4,7 @@ import {
   createVenueAction,
   registerContainerAction,
   renameVenueAction,
+  requestRefundAction,
 } from "@/app/app/actions"
 import { CameraScanner } from "@/components/camera-scanner"
 import { createQrSvg } from "@/lib/qr-code"
@@ -93,7 +94,18 @@ export function OperatorDashboard({ dashboard }: OperatorDashboardProps) {
                       {container.isDemo ? <span className="demo-data-label">Demo</span> : null}
                     </div>
                     <div><span>Status</span><strong className="status-text"><Sparkles aria-hidden="true" size={15} />{formatStatus(container.status)}</strong></div>
-                    <div><span>Consumer and deposit ledger</span><strong>{container.customer ?? "None active"}</strong><small>{depositNote(container)}</small></div>
+                    <div>
+                      <span>Consumer and deposit ledger</span>
+                      <strong>{container.customer ?? "None active"}</strong>
+                      <small>{depositNote(container)}</small>
+                      {container.borrowId && container.borrowStatus === "returned" && container.depositStatus === "paid" && container.paymentStatus === "paid" && container.refundStatus === "none" ? (
+                        <form action={requestRefundAction} className="stacked-form">
+                          <input name="venueId" type="hidden" value={dashboard.venue?.id ?? ""} />
+                          <input name="borrowId" type="hidden" value={container.borrowId} />
+                          <button className="button button--outline" type="submit">Request test refund</button>
+                        </form>
+                      ) : null}
+                    </div>
                     <div><span>Latest event</span><strong>{container.latestEvent ? formatStatus(container.latestEvent) : "Registered"}</strong><small>{container.latestEventAt ? formatTime(container.latestEventAt) : "Saved in venue pool"}</small></div>
                   </article>
                 ))}
@@ -111,6 +123,9 @@ export function OperatorDashboard({ dashboard }: OperatorDashboardProps) {
 function depositNote(container: OperatorDashboardData["containers"][number]): string {
   if (container.depositMinor === null || !container.depositCurrency) return "No borrow yet"
   const amount = formatDepositAmount(container.depositMinor, container.depositCurrency)
+  if (container.depositStatus === "refunded") return `${amount} Paystack test refund recorded`
+  if (container.refundStatus === "pending") return `${amount} Paystack test refund requested. Waiting for a verified provider outcome.`
+  if (container.refundStatus === "failed") return `${amount} Paystack test refund did not complete`
   if (container.depositStatus === "paid") return `${amount} Paystack test payment recorded`
   if (container.depositStatus === "return_recorded") return `${amount} expected, return recorded`
   return `${amount} expected, not collected by ReTray`

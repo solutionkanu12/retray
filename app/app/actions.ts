@@ -1,16 +1,19 @@
 "use server"
 
+import { env } from "cloudflare:workers"
 import { redirect } from "next/navigation"
 
 import { VERIFY_EMAIL_REQUIRED } from "../../lib/auth-email"
 import { currentUser } from "../../lib/auth-session"
 import { parseExpectedDeposit } from "../../lib/deposit"
+import { providerEnv } from "../../lib/provider-config"
 import type { CirculationEventType } from "../../lib/circulation-domain"
 import {
   applyCirculationEvent,
   createVenue,
   registerContainer,
   renameVenue,
+  requestDepositRefund,
   returnBorrowedContainer,
 } from "../../lib/retray-data"
 
@@ -61,6 +64,15 @@ export async function consumerReturnAction(formData: FormData): Promise<void> {
     const user = await actionUser()
     await returnBorrowedContainer(user, qrId)
   }, "Return recorded. No payment was moved.")
+}
+
+export async function requestRefundAction(formData: FormData): Promise<void> {
+  const venueId = stringField(formData, "venueId")
+  const borrowId = stringField(formData, "borrowId")
+  await runAction(async () => {
+    const user = await actionUser()
+    await requestDepositRefund(user, borrowId, providerEnv(env))
+  }, "Paystack test refund requested. Waiting for a verified provider outcome.", venueId)
 }
 
 async function actionUser() {
