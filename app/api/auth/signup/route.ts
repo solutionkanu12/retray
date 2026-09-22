@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { registerAccount } from "@/lib/auth-data"
 import { SESSION_COOKIE } from "@/lib/auth-session"
 import { sendVerificationEmail } from "@/lib/email-service"
+import { providerEnv } from "@/lib/provider-config"
 import { isSameOriginRequest } from "@/lib/request-origin"
 
 export async function POST(request: Request) {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     const destination = new URL("/verify", request.url)
     try {
       await sendVerificationEmail({
-        source: env as unknown as Record<string, unknown>,
+        source: providerEnv(env),
         to: account.email,
         token: account.verificationToken,
       })

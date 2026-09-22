@@ -1,3 +1,5 @@
+export const NEW_DEPOSIT_CURRENCY = "NGN"
+
 export function parseExpectedDeposit(value: string): number {
   const amount = value.trim()
   if (!amount) return 0
@@ -6,4 +8,8 @@ export function parseExpectedDeposit(value: string): number {
   }
   const [whole, fraction = ""] = amount.split(".")
   return Number(whole) * 100 + Number(fraction.padEnd(2, "0"))
+}
+
+export function formatDepositAmount(minor: number, currency: string): string {
+  return new Intl.NumberFormat("en", { style: "currency", currency }).format(minor / 100)
 }

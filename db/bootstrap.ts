@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS borrows (
   issued_by_user_id text NOT NULL REFERENCES users(id),
   status text DEFAULT 'active' NOT NULL,
   deposit_minor integer DEFAULT 0 NOT NULL,
-  deposit_currency text DEFAULT 'EUR' NOT NULL,
+  deposit_currency text DEFAULT 'NGN' NOT NULL,
   deposit_status text DEFAULT 'not_collected' NOT NULL,
   is_demo integer DEFAULT false NOT NULL,
   issued_at text DEFAULT CURRENT_TIMESTAMP NOT NULL,

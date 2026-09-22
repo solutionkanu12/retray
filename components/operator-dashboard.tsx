@@ -7,6 +7,7 @@ import {
 } from "@/app/app/actions"
 import { CameraScanner } from "@/components/camera-scanner"
 import { createQrSvg } from "@/lib/qr-code"
+import { formatDepositAmount } from "@/lib/deposit"
 import type { OperatorDashboard as OperatorDashboardData } from "@/lib/retray-data"
 
 type OperatorDashboardProps = {
@@ -92,7 +93,7 @@ export function OperatorDashboard({ dashboard }: OperatorDashboardProps) {
                       {container.isDemo ? <span className="demo-data-label">Demo</span> : null}
                     </div>
                     <div><span>Status</span><strong className="status-text"><Sparkles aria-hidden="true" size={15} />{formatStatus(container.status)}</strong></div>
-                    <div><span>Consumer and deposit ledger</span><strong>{container.customer ?? "None active"}</strong><small>{container.depositMinor === null ? "No borrow yet" : `${new Intl.NumberFormat("en", { style: "currency", currency: "EUR" }).format(container.depositMinor / 100)} expected, ${container.depositStatus === "return_recorded" ? "return recorded" : "not collected by ReTray"}`}</small></div>
+                    <div><span>Consumer and deposit ledger</span><strong>{container.customer ?? "None active"}</strong><small>{depositNote(container)}</small></div>
                     <div><span>Latest event</span><strong>{container.latestEvent ? formatStatus(container.latestEvent) : "Registered"}</strong><small>{container.latestEventAt ? formatTime(container.latestEventAt) : "Saved in venue pool"}</small></div>
                   </article>
                 ))}
@@ -105,6 +106,14 @@ export function OperatorDashboard({ dashboard }: OperatorDashboardProps) {
       )}
     </main>
   )
+}
+
+function depositNote(container: OperatorDashboardData["containers"][number]): string {
+  if (container.depositMinor === null || !container.depositCurrency) return "No borrow yet"
+  const amount = formatDepositAmount(container.depositMinor, container.depositCurrency)
+  if (container.depositStatus === "paid") return `${amount} Paystack test payment recorded`
+  if (container.depositStatus === "return_recorded") return `${amount} expected, return recorded`
+  return `${amount} expected, not collected by ReTray`
 }
 
 function formatStatus(value: string): string {

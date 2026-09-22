@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers"
 import { NextResponse } from "next/server"
 import { getSessionUser, issueVerificationToken } from "@/lib/auth-data"
 import { sendVerificationEmail } from "@/lib/email-service"
+import { providerEnv } from "@/lib/provider-config"
 import { isSameOriginRequest } from "@/lib/request-origin"
 
 export async function POST(request: Request) {
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
   try {
     const token = await issueVerificationToken(user)
     await sendVerificationEmail({
-      source: env as unknown as Record<string, unknown>,
+      source: providerEnv(env),
       to: user.email,
       token,
     })

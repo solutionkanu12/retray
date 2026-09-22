@@ -1,6 +1,7 @@
 import { Clock3, PackageOpen } from "lucide-react"
 
 import type { ConsumerBorrow } from "@/lib/retray-data"
+import { formatDepositAmount } from "@/lib/deposit"
 import { ConsumerReturnScanner } from "@/components/consumer-return-scanner"
 
 type ConsumerDashboardProps = {
@@ -53,11 +54,25 @@ function BorrowRow({ borrow }: { borrow: ConsumerBorrow }) {
       <div><span>Container</span><strong>{borrow.containerLabel}</strong><small>QR payload: {borrow.qrId}</small>{borrow.isDemo ? <small>Seeded demo data</small> : null}</div>
       <div><span>Venue</span><strong>{borrow.venueName}</strong></div>
       <div><span>Return status</span><strong>{borrow.borrowStatus === "active" ? "Return active" : "Returned"}</strong></div>
-      <div><span>Expected deposit ledger</span><strong>{formatMoney(borrow.depositMinor, borrow.depositCurrency)}</strong><small>{borrow.depositStatus === "not_collected" ? "Expected amount only. ReTray collected no payment." : "Return recorded. No payment moved."}</small></div>
+      <div>
+        <span>Expected deposit ledger</span>
+        <strong>{formatDepositAmount(borrow.depositMinor, borrow.depositCurrency)}</strong>
+        <small>{depositNote(borrow)}</small>
+        {borrow.borrowStatus === "active" && borrow.depositMinor > 0 && borrow.depositCurrency === "NGN" && borrow.depositStatus !== "paid" ? (
+          <form action="/api/paystack/initialize" className="stacked-form" method="post">
+            <input name="borrowId" type="hidden" value={borrow.id} />
+            <button className="button button--rose" type="submit">Pay test deposit</button>
+          </form>
+        ) : null}
+      </div>
     </article>
   )
 }
 
-function formatMoney(minor: number, currency: string): string {
-  return new Intl.NumberFormat("en", { style: "currency", currency }).format(minor / 100)
+function depositNote(borrow: ConsumerBorrow): string {
+  if (borrow.depositStatus === "paid") return "Paystack test payment recorded. This is test money, not a live payment."
+  if (borrow.depositStatus === "return_recorded") return "Return recorded. No payment moved."
+  if (borrow.paymentStatus === "pending") return "Paystack test checkout started. Waiting for a verified webhook. The browser return does not mark this paid."
+  if (borrow.depositCurrency === "NGN" && borrow.depositMinor > 0) return "NGN Paystack test-mode deposit. Test money only."
+  return "Expected amount only. ReTray collected no payment."
 }

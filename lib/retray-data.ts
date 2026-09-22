@@ -5,10 +5,27 @@ import {
   borrows,
   circulationEvents,
   containers,
+  paymentAttempts,
+  processedWebhookEvents,
   users,
   venues,
   type UserRecord,
 } from "../db/schema"
+import { NEW_DEPOSIT_CURRENCY } from "./deposit"
+import { readProviderConfig } from "./provider-config"
+import {
+  assertConsumerMayInitializePayment,
+  applyPaystackChargeSuccess,
+  createPaymentAttemptDraft,
+  paystackInitializeBody,
+  type DepositStatus,
+} from "./payment-domain"
+import {
+  initializePaystackCheckout,
+  parsePaystackWebhook,
+  paystackEventDigest,
+  verifyPaystackSignature,
+} from "./paystack"
 import {
   assertConsumerAccess,
   assertBorrowReturnAccess,
@@ -25,7 +42,8 @@ export type OperatorContainer = {
   status: ContainerStatus
   customer: string | null
   depositMinor: number | null
-  depositStatus: "not_collected" | "return_recorded" | null
+  depositCurrency: string | null
+  depositStatus: DepositStatus | null
   latestEvent: CirculationEventType | null
   latestEventAt: string | null
   isDemo: boolean
@@ -52,7 +70,8 @@ export type ConsumerBorrow = {
   borrowStatus: "active" | "returned"
   depositMinor: number
   depositCurrency: string
-  depositStatus: "not_collected" | "return_recorded"
+  depositStatus: DepositStatus
+  paymentStatus: "none" | "pending" | "paid" | "failed"
   issuedAt: string
   returnedAt: string | null
   isDemo: boolean
@@ -151,7 +170,7 @@ export async function applyCirculationEvent(input: {
         consumerUserId: consumer.id,
         issuedByUserId: input.user.id,
         depositMinor,
-        depositCurrency: "EUR",
+        depositCurrency: NEW_DEPOSIT_CURRENCY,
         depositStatus: "not_collected",
         issuedAt: timestamp,
       }),
@@ -274,6 +293,7 @@ export async function getOperatorDashboard(
         containerId: borrows.containerId,
         consumerName: users.displayName,
         depositMinor: borrows.depositMinor,
+        depositCurrency: borrows.depositCurrency,
         depositStatus: borrows.depositStatus,
       })
       .from(borrows)
@@ -309,7 +329,8 @@ export async function getOperatorDashboard(
       status: container.status as ContainerStatus,
       customer: container.status === "borrowed" ? borrowByContainer.get(container.id)?.consumerName ?? null : null,
       depositMinor: borrowByContainer.get(container.id)?.depositMinor ?? null,
-      depositStatus: borrowByContainer.get(container.id)?.depositStatus ?? null,
+      depositCurrency: borrowByContainer.get(container.id)?.depositCurrency ?? null,
+      depositStatus: (borrowByContainer.get(container.id)?.depositStatus as DepositStatus | undefined) ?? null,
       latestEvent: (latest?.eventType as CirculationEventType | undefined) ?? null,
       latestEventAt: latest?.occurredAt ?? null,
       isDemo: container.isDemo,
@@ -340,7 +361,7 @@ export async function getConsumerBorrows(
     user.id,
   )
   const db = await getDb()
-  return db
+  const rows = await db
     .select({
       id: borrows.id,
       containerLabel: containers.label,
@@ -360,6 +381,143 @@ export async function getConsumerBorrows(
     .innerJoin(venues, eq(containers.venueId, venues.id))
     .where(eq(borrows.consumerUserId, user.id))
     .orderBy(desc(borrows.issuedAt))
+  const payments = rows.length
+    ? await db
+      .select({
+        borrowId: paymentAttempts.borrowId,
+        status: paymentAttempts.status,
+        createdAt: paymentAttempts.createdAt,
+      })
+      .from(paymentAttempts)
+      .where(eq(paymentAttempts.consumerUserId, user.id))
+      .orderBy(desc(paymentAttempts.createdAt))
+    : []
+  const paymentByBorrow = new Map<string, "pending" | "paid" | "failed">()
+  for (const payment of payments) {
+    if (!paymentByBorrow.has(payment.borrowId)) paymentByBorrow.set(payment.borrowId, payment.status)
+  }
+  return rows.map((row) => ({
+    ...row,
+    depositStatus: row.depositStatus as DepositStatus,
+    paymentStatus: paymentByBorrow.get(row.id) ?? "none",
+  }))
+}
+
+export async function initializeDepositCheckout(
+  user: UserRecord,
+  borrowId: string,
+  source: Record<string, unknown>,
+): Promise<string> {
+  requireConsumer(user)
+  const db = await getDb()
+  const [row] = await db
+    .select({ borrow: borrows, email: users.email })
+    .from(borrows)
+    .innerJoin(users, eq(borrows.consumerUserId, users.id))
+    .where(eq(borrows.id, borrowId))
+  if (!row) throw new Error("Borrow not found.")
+  assertConsumerMayInitializePayment(
+    { id: user.id, accountType: user.accountType },
+    {
+      consumerUserId: row.borrow.consumerUserId,
+      status: row.borrow.status,
+      depositMinor: row.borrow.depositMinor,
+      depositCurrency: row.borrow.depositCurrency,
+      depositStatus: row.borrow.depositStatus as DepositStatus,
+    },
+  )
+  const draft = createPaymentAttemptDraft({
+    borrowId: row.borrow.id,
+    consumerUserId: row.borrow.consumerUserId,
+    depositMinor: row.borrow.depositMinor,
+    depositCurrency: row.borrow.depositCurrency,
+  })
+  const body = paystackInitializeBody({
+    email: row.email,
+    attempt: draft,
+    callbackUrl: `${readProviderConfig(source, "APP_BASE_URL")}/app/payment/return`,
+  })
+  await db.insert(paymentAttempts).values({
+    id: crypto.randomUUID(),
+    borrowId: draft.borrowId,
+    consumerUserId: draft.consumerUserId,
+    providerReference: draft.providerReference,
+    status: draft.status,
+    amountMinor: draft.amountMinor,
+    currency: draft.currency,
+  })
+  const authorizationUrl = await initializePaystackCheckout({
+    source,
+    email: body.email,
+    amount: body.amount,
+    currency: body.currency,
+    reference: body.reference,
+    callbackUrl: body.callback_url,
+  })
+  await db
+    .update(paymentAttempts)
+    .set({ authorizationUrl, updatedAt: new Date().toISOString() })
+    .where(eq(paymentAttempts.providerReference, draft.providerReference))
+  return authorizationUrl
+}
+
+export async function applyPaystackWebhook(
+  rawBody: string,
+  signature: string,
+  source: Record<string, unknown>,
+): Promise<"accepted" | "duplicate" | "ignored"> {
+  const secret = readProviderConfig(source, "PAYSTACK_SECRET_KEY")
+  if (!await verifyPaystackSignature(rawBody, signature, secret)) {
+    throw new Error("Invalid Paystack webhook signature.")
+  }
+  const event = parsePaystackWebhook(rawBody)
+  if (!event) return "ignored"
+  const digest = await paystackEventDigest(rawBody)
+  const reference = event.data?.reference
+  if (!reference) return "ignored"
+  const db = await getDb()
+  const [attempt] = await db.select().from(paymentAttempts).where(eq(paymentAttempts.providerReference, reference))
+  if (!attempt) return "ignored"
+  const [borrow] = await db.select().from(borrows).where(eq(borrows.id, attempt.borrowId))
+  if (!borrow) return "ignored"
+  const [existing] = await db.select().from(processedWebhookEvents).where(eq(processedWebhookEvents.eventDigest, digest))
+  const applied = applyPaystackChargeSuccess(
+    {
+      attempt: {
+        id: attempt.id,
+        providerReference: attempt.providerReference,
+        status: attempt.status,
+        amountMinor: attempt.amountMinor,
+        currency: attempt.currency,
+        consumerUserId: attempt.consumerUserId,
+      },
+      deposit: {
+        status: borrow.depositStatus as DepositStatus,
+        currency: borrow.depositCurrency,
+        minor: borrow.depositMinor,
+      },
+      processedEventDigests: existing ? [digest] : [],
+    },
+    event,
+    digest,
+  )
+  if (!applied) return "ignored"
+  if (applied.duplicate && existing) return "duplicate"
+  const timestamp = new Date().toISOString()
+  if (!existing) {
+    await db.insert(processedWebhookEvents).values({
+      eventDigest: digest,
+      paymentAttemptId: attempt.id,
+      eventType: event.event ?? "charge.success",
+    })
+  }
+  if (applied.ledger.attempt.status === "paid") {
+    await db.batch([
+      db.update(paymentAttempts).set({ status: "paid", updatedAt: timestamp }).where(eq(paymentAttempts.id, attempt.id)),
+      db.update(borrows).set({ depositStatus: "paid" }).where(eq(borrows.id, attempt.borrowId)),
+    ])
+  }
+  return applied.duplicate ? "duplicate" : "accepted"
 }
 
 async function requireOwnedVenue(user: UserRecord, venueId: string) {

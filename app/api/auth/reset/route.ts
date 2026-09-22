@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { requestPasswordReset } from "@/lib/auth-data"
 import { passwordResetReceipt } from "@/lib/auth-email"
 import { sendPasswordResetEmail } from "@/lib/email-service"
-import { readProviderConfig } from "@/lib/provider-config"
+import { providerEnv, readProviderConfig } from "@/lib/provider-config"
 import { isSameOriginRequest, requestClientIdentity } from "@/lib/request-origin"
 
 export async function POST(request: Request) {
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const form = await request.formData()
   const email = form.get("email")
   const destination = new URL("/reset", request.url)
-  const source = env as unknown as Record<string, unknown>
+  const source = providerEnv(env)
   try {
     readProviderConfig(source, "RESEND_API_KEY")
     readProviderConfig(source, "RESEND_FROM_EMAIL")

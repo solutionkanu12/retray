@@ -13,3 +13,12 @@ test("application base URL accepts local HTTP and rejects malformed origins", ()
   assert.equal(readProviderConfig({ APP_BASE_URL: "http://127.0.0.1:8787" }, "APP_BASE_URL"), "http://127.0.0.1:8787")
   assert.throws(() => readProviderConfig({ APP_BASE_URL: "https://example.com/path" }, "APP_BASE_URL"), /configuration unavailable/i)
 })
+
+test("Resend sender accepts a bare address or a display name without disclosing it", () => {
+  assert.equal(readProviderConfig({ RESEND_FROM_EMAIL: "retray@useiwa.xyz" }, "RESEND_FROM_EMAIL"), "retray@useiwa.xyz")
+  assert.equal(
+    readProviderConfig({ RESEND_FROM_EMAIL: "ReTray <retray@useiwa.xyz>" }, "RESEND_FROM_EMAIL"),
+    "ReTray <retray@useiwa.xyz>",
+  )
+  assert.throws(() => readProviderConfig({ RESEND_FROM_EMAIL: "useiwa.xyz" }, "RESEND_FROM_EMAIL"), /configuration unavailable/i)
+})

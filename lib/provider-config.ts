@@ -22,7 +22,7 @@ export function readProviderConfig(source: Record<string, unknown>, name: Provid
     }
   }
   if (name === "RESEND_API_KEY" && (!clean.startsWith("re_") || clean.length < 15)) throw unavailable()
-  if (name === "RESEND_FROM_EMAIL" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) throw unavailable()
+  if (name === "RESEND_FROM_EMAIL" && !isResendFrom(clean)) throw unavailable()
   if (name === "APP_BASE_URL") {
     let url: URL
     try { url = new URL(clean) } catch { throw unavailable() }
@@ -32,4 +32,29 @@ export function readProviderConfig(source: Record<string, unknown>, name: Provid
     }
   }
   return clean
+}
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function isResendFrom(value: string): boolean {
+  const angled = value.match(/^(?:"[^"]+"|[\w .'-]+)\s<([^>]+)>$/)
+  return emailPattern.test(angled?.[1] ?? value)
+}
+
+export function providerEnv(source: object): Record<string, unknown> {
+  const names: ProviderConfigKey[] = [
+    "RESEND_API_KEY",
+    "RESEND_FROM_EMAIL",
+    "PAYSTACK_PUBLIC_KEY",
+    "PAYSTACK_SECRET_KEY",
+    "APP_BASE_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+  ]
+  const record: Record<string, unknown> = {}
+  for (const name of names) {
+    const value = Reflect.get(source, name)
+    if (typeof value === "string") record[name] = value
+  }
+  return record
 }

@@ -118,9 +118,9 @@ export const borrows = sqliteTable(
       .notNull()
       .default("active"),
     depositMinor: integer("deposit_minor").notNull().default(0),
-    depositCurrency: text("deposit_currency").notNull().default("EUR"),
+    depositCurrency: text("deposit_currency").notNull().default("NGN"),
     depositStatus: text("deposit_status", {
-      enum: ["not_collected", "return_recorded"],
+      enum: ["not_collected", "paid", "return_recorded"],
     })
       .notNull()
       .default("not_collected"),
