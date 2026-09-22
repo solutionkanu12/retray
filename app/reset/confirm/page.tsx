@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { DismissibleMessage } from "@/components/dismissible-message"
 import { ReTrayMark } from "@/components/retray-mark"
 import { AUTH_LINK_INVALID } from "@/lib/auth-email"
 
@@ -15,9 +16,9 @@ export default async function ResetConfirmPage({
         <p className="eyebrow">Password reset</p>
         <h1>Choose a new password.</h1>
         <p>This link expires in 15 minutes and can be used once.</p>
-        {error ? <p className="product-message is-error" role="alert">{error}</p> : null}
+        {error ? <DismissibleMessage tone="error">{error}</DismissibleMessage> : null}
         {!token ? (
-          <p className="product-message is-error" role="alert">{AUTH_LINK_INVALID}</p>
+          <DismissibleMessage tone="error">{AUTH_LINK_INVALID}</DismissibleMessage>
         ) : (
           <form action="/api/auth/reset/confirm" className="stacked-form auth-form" method="post">
             <input name="token" type="hidden" value={token} />

@@ -368,6 +368,7 @@ img, svg { display: block; }
 @keyframes app-view-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (hover: hover) and (pointer: fine) {
+  .product-message__dismiss:hover { border-color: var(--separator); background: var(--surface-raised); color: var(--ink); }
   .venue-switcher:hover { border-color: var(--rose); background: var(--surface-raised); }
   .ledger-row--active:hover { background: var(--surface-raised); border-bottom-color: var(--rose); }
   .back-link:hover { color: var(--rose); }
@@ -430,7 +431,11 @@ img, svg { display: block; }
 .product-intro h1, .onboarding-panel h1 { margin: 24px 0 16px; font-family: var(--font-display); font-size: clamp(48px, 6vw, 72px); font-weight: 300; letter-spacing: -.045em; line-height: 1; }
 .product-intro p:last-child, .onboarding-panel > p { max-width: 680px; margin-bottom: 0; color: var(--ink-soft); }
 .demo-data-label { width: fit-content; padding: 5px 8px; border: 1px solid var(--rose); border-radius: 999px; color: var(--rose); font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
-.product-message { width: min(100% - 96px, 1180px); margin: 24px auto 0; padding: 12px 16px; border: 1px solid var(--rose); background: rgba(227, 178, 179, .08); color: var(--ink-soft); font-size: 13px; }
+.product-message { width: min(100% - 96px, 1180px); max-height: 160px; margin: 24px auto 0; padding: 12px 16px; display: grid; grid-template-columns: minmax(0, 1fr) 28px; align-items: start; gap: 12px; overflow: hidden; border: 1px solid var(--rose); background: rgba(227, 178, 179, .08); color: var(--ink-soft); font-size: 13px; transition: max-height 180ms ease, margin-top 180ms ease, padding 180ms ease, opacity 160ms ease, transform 160ms ease, border-color 160ms ease; }
+.product-message__copy { min-width: 0; padding: 4px 0; }
+.product-message__dismiss { width: 28px; height: 28px; margin: -4px -4px -4px 0; display: grid; place-items: center; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; transition: color 160ms ease, border-color 160ms ease, background 160ms ease; }
+.product-message__dismiss:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; color: var(--ink); }
+.product-message.is-dismissing { max-height: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; border-color: transparent; opacity: 0; transform: translateY(-4px); }
 .product-message.is-error { border-style: dashed; }
 .onboarding-panel { margin-top: 72px; }
 .onboarding-options { margin-top: 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }

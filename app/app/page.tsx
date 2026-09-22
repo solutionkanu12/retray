@@ -1,4 +1,5 @@
 import { ConsumerDashboard } from "@/components/consumer-dashboard"
+import { DismissibleMessage } from "@/components/dismissible-message"
 import { OperatorDashboard } from "@/components/operator-dashboard"
 import { ProductHeader } from "@/components/product-header"
 import { getConsumerBorrows, getOperatorDashboard } from "@/lib/retray-data"
@@ -44,5 +45,5 @@ async function renderProductPage({ searchParams }: ProductPageProps) {
 function ProductMessage({ error, notice }: { error?: string; notice?: string }) {
   const message = error ?? notice
   if (!message) return null
-  return <p className={`product-message ${error ? "is-error" : ""}`} role={error ? "alert" : "status"}>{message}</p>
+  return <DismissibleMessage tone={error ? "error" : undefined}>{message}</DismissibleMessage>
 }

@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
+import { DismissibleMessage } from "@/components/dismissible-message"
 import { ReTrayMark } from "@/components/retray-mark"
 import { consumeEmailVerification } from "@/lib/auth-data"
 import { AUTH_LINK_INVALID, isEmailVerified } from "@/lib/auth-email"
@@ -32,8 +33,8 @@ export default async function VerifyPage({
         <p className="eyebrow">Email verification</p>
         <h1>Verify your email to continue.</h1>
         <p>Open the verification link from this account email. The link expires in 15 minutes and can be used once.</p>
-        {params.error ? <p className="product-message is-error" role="alert">{params.error}</p> : null}
-        {params.notice ? <p className="product-message" role="status">{params.notice}</p> : null}
+        {params.error ? <DismissibleMessage tone="error">{params.error}</DismissibleMessage> : null}
+        {params.notice ? <DismissibleMessage>{params.notice}</DismissibleMessage> : null}
         {user ? (
           <form action="/api/auth/verify/resend" className="stacked-form auth-form" method="post">
             <button className="button button--rose" type="submit">Send a new link</button>

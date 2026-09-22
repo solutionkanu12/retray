@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { DismissibleMessage } from "@/components/dismissible-message"
 import { ReTrayMark } from "@/components/retray-mark"
 
 export default async function ResetPage({
@@ -14,8 +15,8 @@ export default async function ResetPage({
         <p className="eyebrow">Password reset</p>
         <h1>Reset your password.</h1>
         <p>Enter the email for your ReTray account. If it is registered, a reset link will be sent.</p>
-        {error ? <p className="product-message is-error" role="alert">{error}</p> : null}
-        {notice ? <p className="product-message" role="status">{notice}</p> : null}
+        {error ? <DismissibleMessage tone="error">{error}</DismissibleMessage> : null}
+        {notice ? <DismissibleMessage>{notice}</DismissibleMessage> : null}
         <form action="/api/auth/reset" className="stacked-form auth-form" method="post">
           <label>Email<input autoComplete="email" name="email" required type="email" /></label>
           <button className="button button--rose" type="submit">Send reset link</button>

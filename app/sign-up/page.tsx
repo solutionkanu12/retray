@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { DismissibleMessage } from "@/components/dismissible-message"
 import { ReTrayMark } from "@/components/retray-mark"
 
 export default async function SignUpPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -10,7 +11,7 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
         <p className="eyebrow">Account setup</p>
         <h1>Start a real loop.</h1>
         <p>Choose your role, then create an account. Business operators also create their first venue.</p>
-        {error ? <p className="product-message is-error" role="alert">{error}</p> : null}
+        {error ? <DismissibleMessage tone="error">{error}</DismissibleMessage> : null}
         <form action="/api/auth/signup" className="stacked-form auth-form" method="post">
           <fieldset className="account-role-options">
             <legend>Account type</legend>
