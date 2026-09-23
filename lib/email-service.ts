@@ -1,6 +1,6 @@
 import {
   AUTH_LINK_TTL_MS,
-  passwordResetLink,
+  emailLoginLink,
   verificationLink,
 } from "./auth-email.ts"
 import { readProviderConfig } from "./provider-config.ts"
@@ -23,14 +23,14 @@ export function verificationEmailText(baseUrl: string, token: string): string {
   ].join("\n")
 }
 
-export function passwordResetEmailText(baseUrl: string, token: string): string {
+export function signInEmailText(baseUrl: string, token: string): string {
   return [
-    "Use this link to choose a new ReTray password.",
+    "Use this link to sign in to your ReTray account.",
     `It expires in ${minutesLabel()} minutes and can be used once.`,
     "",
-    passwordResetLink(baseUrl, token),
+    emailLoginLink(baseUrl, token),
     "",
-    "If you did not request this, ignore this message.",
+    "If you did not request this link, ignore this message.",
   ].join("\n")
 }
 
@@ -50,7 +50,7 @@ export async function sendVerificationEmail(input: {
   })
 }
 
-export async function sendPasswordResetEmail(input: {
+export async function sendSignInEmail(input: {
   source: EmailSource
   to: string
   token: string
@@ -60,8 +60,8 @@ export async function sendPasswordResetEmail(input: {
   await sendAccountEmail({
     source: input.source,
     to: input.to,
-    subject: "Reset your ReTray password",
-    text: passwordResetEmailText(baseUrl, input.token),
+    subject: "Sign in to ReTray",
+    text: signInEmailText(baseUrl, input.token),
     fetchImpl: input.fetchImpl,
   })
 }

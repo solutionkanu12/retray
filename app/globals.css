@@ -157,7 +157,7 @@ img, svg { display: block; }
 .site-footer__brand p { max-width: 470px; margin: 20px 0 0; color: var(--muted); font-size: 14px; }
 .site-footer__links { display: flex; flex-direction: column; align-items: flex-start; }
 .social-links { display: flex; gap: 8px; }
-.social-links button { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--separator); border-radius: 4px; background: transparent; }
+.social-links :is(button, a) { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--separator); border-radius: 4px; background: transparent; }
 .site-footer__base { margin-top: 64px; padding-top: 24px; display: flex; justify-content: space-between; border-top: 1px solid var(--separator); color: var(--muted); font-size: 11px; }
 
 .reveal-in { animation: reveal-in 520ms cubic-bezier(.23, 1, .32, 1) both; }

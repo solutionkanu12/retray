@@ -20,9 +20,8 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
           </fieldset>
           <label>Your name<input autoComplete="name" maxLength={80} name="displayName" required /></label>
           <label>Email<input autoComplete="email" name="email" required type="email" /></label>
-          <label>Password<input autoComplete="new-password" minLength={12} name="password" required type="password" /><span>Use at least 12 characters.</span></label>
           <label className="auth-venue-field">Venue name for business operators<input maxLength={80} name="venueName" placeholder="Your venue" /></label>
-          <button className="button button--rose" type="submit">Create account</button>
+          <button className="button button--rose" type="submit">Email me a sign-in link</button>
         </form>
         <p>Already have an account? <Link className="text-link" href="/sign-in">Sign in</Link></p>
       </section>

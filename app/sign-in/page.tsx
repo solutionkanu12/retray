@@ -10,15 +10,13 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
       <section className="onboarding-panel">
         <p className="eyebrow">Account access</p>
         <h1>Sign in to your loop.</h1>
-        <p>Use the email and password for your ReTray account.</p>
+        <p>Enter your account email and we will send a sign-in link.</p>
         {error ? <DismissibleMessage tone="error">{error}</DismissibleMessage> : null}
         {notice ? <DismissibleMessage>{notice}</DismissibleMessage> : null}
         <form action="/api/auth/signin" className="stacked-form auth-form" method="post">
           <label>Email<input autoComplete="email" name="email" required type="email" /></label>
-          <label>Password<input autoComplete="current-password" name="password" required type="password" /></label>
-          <button className="button button--rose" type="submit">Sign in</button>
+          <button className="button button--rose" type="submit">Email me a sign-in link</button>
         </form>
-        <p><Link className="text-link" href="/reset">Reset your password</Link></p>
         <p>New to ReTray? <Link className="text-link" href="/sign-up">Create an account</Link></p>
       </section>
     </main>

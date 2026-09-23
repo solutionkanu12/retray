@@ -3,13 +3,14 @@ import test from "node:test"
 import {
   AUTH_LINK_TTL_MS,
   applyEmailVerification,
-  applyPasswordReset,
   authLinkExpiresAt,
-  passwordResetReceipt,
+  emailLoginLink,
+  GENERIC_SIGN_IN_RECEIPT,
+  isEmailLinkPurpose,
   unverifiedSignupFields,
   verificationLink,
 } from "../lib/auth-email.ts"
-import { sendAccountEmail } from "../lib/email-service.ts"
+import { sendVerificationEmail, signInEmailText } from "../lib/email-service.ts"
 import { SIGN_IN_MAX_ATTEMPTS, recordRateLimitAttempt } from "../lib/rate-limit.ts"
 
 const now = "2026-09-21T12:00:00.000Z"
@@ -46,19 +47,9 @@ test("replayed verification does not change the account", () => {
   assert.equal(user.emailVerifiedAt, null)
 })
 
-test("password reset responses do not reveal whether an email exists", () => {
-  assert.equal(passwordResetReceipt(true), passwordResetReceipt(false))
-  assert.match(passwordResetReceipt(true), /if that email is registered/i)
-})
-
-test("valid reset consumes the link once", () => {
-  const consumed = applyPasswordReset({ expiresAt: later, consumedAt: null }, now)
-  assert.deepEqual(consumed, { expiresAt: later, consumedAt: now })
-})
-
-test("replayed reset does not consume the link again", () => {
-  const consumed = applyPasswordReset({ expiresAt: later, consumedAt: now }, now)
-  assert.equal(consumed, null)
+test("email-only sign-in keeps the same response for known and unknown accounts", () => {
+  assert.match(GENERIC_SIGN_IN_RECEIPT, /if this email can sign in/i)
+  assert.equal(GENERIC_SIGN_IN_RECEIPT, GENERIC_SIGN_IN_RECEIPT)
 })
 
 test("repeated sign-in attempts are blocked inside the window", () => {
@@ -84,21 +75,31 @@ test("verification links use APP_BASE_URL and expire after 15 minutes", () => {
   assert.equal(authLinkExpiresAt(Date.parse(now)), later)
   assert.equal(
     verificationLink("http://127.0.0.1:8787", "token-value"),
-    "http://127.0.0.1:8787/verify?token=token-value",
+    "http://127.0.0.1:8787/api/auth/link?token=token-value&purpose=verification",
   )
 })
 
-test("Resend email sending stays on the server and hides provider secrets", async () => {
+test("email sign-in links use a separate explicit purpose", () => {
+  assert.equal(isEmailLinkPurpose("verification"), true)
+  assert.equal(isEmailLinkPurpose("sign_in"), true)
+  assert.equal(isEmailLinkPurpose("password_reset"), false)
+  assert.equal(
+    emailLoginLink("http://127.0.0.1:8787", "token-value"),
+    "http://127.0.0.1:8787/api/auth/link?token=token-value&purpose=sign_in",
+  )
+  assert.match(signInEmailText("http://127.0.0.1:8787", "token-value"), /purpose=sign_in/)
+})
+
+test("passwordless signup sends one Resend verification email without exposing provider secrets", async () => {
   const calls: Array<{ url: string; init: RequestInit }> = []
-  await sendAccountEmail({
+  await sendVerificationEmail({
     source: {
       RESEND_API_KEY: "re_testkey123456",
       RESEND_FROM_EMAIL: "retray@example.com",
       APP_BASE_URL: "http://127.0.0.1:8787",
     },
     to: "maya@example.com",
-    subject: "Verify your ReTray account",
-    text: "http://127.0.0.1:8787/verify?token=token-value",
+    token: "token-value",
     fetchImpl: async (url, init) => {
       calls.push({ url: String(url), init: init ?? {} })
       return new Response("{}", { status: 200 })
@@ -111,14 +112,14 @@ test("Resend email sending stays on the server and hides provider secrets", asyn
   const body = JSON.parse(String(calls[0].init.body))
   assert.equal(body.from, "retray@example.com")
   assert.deepEqual(body.to, ["maya@example.com"])
-  assert.match(body.text, /http:\/\/127\.0\.0\.1:8787\/verify\?token=token-value/)
+  assert.equal(body.subject, "Verify your ReTray account")
+  assert.match(body.text, /http:\/\/127\.0\.0\.1:8787\/api\/auth\/link\?token=token-value&purpose=verification/)
 
   await assert.rejects(
-    () => sendAccountEmail({
+    () => sendVerificationEmail({
       source: { RESEND_API_KEY: "replace-me", RESEND_FROM_EMAIL: "retray@example.com", APP_BASE_URL: "http://127.0.0.1:8787" },
       to: "maya@example.com",
-      subject: "Verify your ReTray account",
-      text: "link",
+      token: "token-value",
     }),
     /configuration unavailable/i,
   )

@@ -2,25 +2,18 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { DismissibleMessage } from "@/components/dismissible-message"
 import { ReTrayMark } from "@/components/retray-mark"
-import { consumeEmailVerification } from "@/lib/auth-data"
-import { AUTH_LINK_INVALID, isEmailVerified } from "@/lib/auth-email"
+import { isEmailLinkPurpose, isEmailVerified } from "@/lib/auth-email"
 import { currentUser } from "@/lib/auth-session"
 
 export default async function VerifyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string; error?: string; notice?: string }>
+  searchParams: Promise<{ token?: string; purpose?: string; error?: string; notice?: string }>
 }) {
   const params = await searchParams
   if (params.token) {
-    try {
-      await consumeEmailVerification(params.token)
-    } catch {
-      redirect(`/verify?error=${encodeURIComponent(AUTH_LINK_INVALID)}`)
-    }
-    const verifiedUser = await currentUser()
-    if (verifiedUser) redirect("/app")
-    redirect("/sign-in?notice=Email+verified.+Sign+in+to+continue.")
+    const purpose = isEmailLinkPurpose(params.purpose) ? params.purpose : "verification"
+    redirect(`/api/auth/link?token=${encodeURIComponent(params.token)}&purpose=${purpose}`)
   }
 
   const user = await currentUser()
@@ -32,7 +25,7 @@ export default async function VerifyPage({
       <section className="onboarding-panel">
         <p className="eyebrow">Email verification</p>
         <h1>Verify your email to continue.</h1>
-        <p>Open the verification link from this account email. The link expires in 15 minutes and can be used once.</p>
+        <p>Open the sign-in link from this account email. The link expires in 15 minutes and can be used once.</p>
         {params.error ? <DismissibleMessage tone="error">{params.error}</DismissibleMessage> : null}
         {params.notice ? <DismissibleMessage>{params.notice}</DismissibleMessage> : null}
         {user ? (
@@ -40,7 +33,7 @@ export default async function VerifyPage({
             <button className="button button--rose" type="submit">Send a new link</button>
           </form>
         ) : (
-          <p>Already have a verified account? <Link className="text-link" href="/sign-in">Sign in</Link></p>
+          <p>Already have an account? <Link className="text-link" href="/sign-in">Sign in</Link></p>
         )}
       </section>
     </main>

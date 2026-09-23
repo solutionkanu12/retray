@@ -1,11 +1,12 @@
 import { consumeOneTimeToken } from "./auth-token.ts"
 
 export const AUTH_LINK_TTL_MS = 15 * 60 * 1000
-export const GENERIC_PASSWORD_RESET_RECEIPT =
-  "If that email is registered, a reset link will be sent."
-export const GENERIC_SIGN_IN_ERROR = "Email or password is incorrect."
+export const GENERIC_SIGN_IN_RECEIPT =
+  "If this email can sign in, a link will arrive shortly."
 export const AUTH_LINK_INVALID = "This link is no longer valid."
 export const VERIFY_EMAIL_REQUIRED = "Verify your email to continue."
+
+export type EmailLinkPurpose = "verification" | "sign_in"
 
 export function unverifiedSignupFields(): { emailVerifiedAt: null } {
   return { emailVerifiedAt: null }
@@ -20,20 +21,22 @@ export function authLinkExpiresAt(nowMs = Date.now()): string {
 }
 
 export function verificationLink(baseUrl: string, token: string): string {
-  const url = new URL("/verify", `${baseUrl}/`)
-  url.searchParams.set("token", token)
-  return url.toString()
+  return emailLink(baseUrl, token, "verification")
 }
 
-export function passwordResetLink(baseUrl: string, token: string): string {
-  const url = new URL("/reset/confirm", `${baseUrl}/`)
-  url.searchParams.set("token", token)
-  return url.toString()
+export function emailLoginLink(baseUrl: string, token: string): string {
+  return emailLink(baseUrl, token, "sign_in")
 }
 
-export function passwordResetReceipt(emailKnown: boolean): string {
-  void emailKnown
-  return GENERIC_PASSWORD_RESET_RECEIPT
+export function isEmailLinkPurpose(value: string | null | undefined): value is EmailLinkPurpose {
+  return value === "verification" || value === "sign_in"
+}
+
+function emailLink(baseUrl: string, token: string, purpose: EmailLinkPurpose): string {
+  const url = new URL("/api/auth/link", `${baseUrl}/`)
+  url.searchParams.set("token", token)
+  url.searchParams.set("purpose", purpose)
+  return url.toString()
 }
 
 export function applyEmailVerification<
@@ -46,11 +49,4 @@ export function applyEmailVerification<
     user: { ...user, emailVerifiedAt: user.emailVerifiedAt ?? now },
     record: consumed,
   }
-}
-
-export function applyPasswordReset<R extends { expiresAt: string; consumedAt: string | null }>(
-  record: R,
-  now: string,
-): R | null {
-  return consumeOneTimeToken(record, now)
 }

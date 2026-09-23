@@ -1,22 +1,19 @@
-import { and, eq, gt, isNull } from "drizzle-orm"
+import { and, eq, gt, isNull, sql } from "drizzle-orm"
 import { getDb } from "../db/index"
 import {
-  credentials,
+  emailLoginTokens,
   emailVerificationTokens,
-  passwordResetTokens,
   rateLimitWindows,
   sessions,
   users,
   venues,
   type UserRecord,
 } from "../db/schema"
-import { createSessionToken, digestSessionToken, hashPassword, normalizeEmail, verifyPassword } from "./auth-core"
+import { createSessionToken, digestSessionToken, normalizeEmail } from "./auth-core"
 import {
   AUTH_LINK_INVALID,
-  GENERIC_SIGN_IN_ERROR,
-  applyEmailVerification,
-  applyPasswordReset,
   authLinkExpiresAt,
+  type EmailLinkPurpose,
   unverifiedSignupFields,
 } from "./auth-email"
 import { createOneTimeToken, digestOneTimeToken } from "./auth-token"
@@ -25,13 +22,18 @@ import { recordRateLimitAttempt, type RateLimitAction, type RateLimitRecord } fr
 
 const SESSION_DAYS = 30
 
+type AuthLinkDispatch = {
+  email: string
+  token: string
+  purpose: EmailLinkPurpose
+}
+
 export async function registerAccount(input: {
   email: string
-  password: string
   displayName: string
   accountType: AccountType
   venueName?: string
-}): Promise<{ sessionToken: string; verificationToken: string; email: string }> {
+}): Promise<AuthLinkDispatch> {
   const email = normalizeEmail(input.email)
   const displayName = requiredName(input.displayName, "Name")
   if (input.accountType !== "consumer" && input.accountType !== "business_operator") {
@@ -40,13 +42,14 @@ export async function registerAccount(input: {
   const venueName = input.accountType === "business_operator"
     ? requiredName(input.venueName ?? "", "Venue name")
     : null
-  const credential = await hashPassword(input.password)
   const db = await getDb()
-  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email))
-  if (existing) throw new Error("This email is already in use.")
+  const [existing] = await db
+    .select({ id: users.id, email: users.email, emailVerifiedAt: users.emailVerifiedAt })
+    .from(users)
+    .where(eq(users.email, email))
+  if (existing) return createLinkForExistingAccount(existing)
 
   const userId = crypto.randomUUID()
-  const sessionToken = createSessionToken()
   const verificationToken = createOneTimeToken()
   const insertUser = db.insert(users).values({
     id: userId,
@@ -55,63 +58,50 @@ export async function registerAccount(input: {
     accountType: input.accountType,
     ...unverifiedSignupFields(),
   })
-  const insertCredential = db.insert(credentials).values({ userId, ...credential })
-  const insertSession = db.insert(sessions).values({
-    tokenDigest: await digestSessionToken(sessionToken),
-    userId,
-    expiresAt: sessionExpiry(),
-  })
   const insertVerification = db.insert(emailVerificationTokens).values({
     tokenDigest: await digestOneTimeToken(verificationToken),
     userId,
     expiresAt: authLinkExpiresAt(),
   })
-  if (venueName) {
-    await db.batch([
-      insertUser,
-      insertCredential,
-      db.insert(venues).values({ id: crypto.randomUUID(), ownerUserId: userId, name: venueName }),
-      insertSession,
-      insertVerification,
-    ])
-  } else {
-    await db.batch([insertUser, insertCredential, insertSession, insertVerification])
+  try {
+    if (venueName) {
+      await db.batch([
+        insertUser,
+        db.insert(venues).values({ id: crypto.randomUUID(), ownerUserId: userId, name: venueName }),
+        insertVerification,
+      ])
+    } else {
+      await db.batch([insertUser, insertVerification])
+    }
+  } catch (error) {
+    const [concurrent] = await db
+      .select({ id: users.id, email: users.email, emailVerifiedAt: users.emailVerifiedAt })
+      .from(users)
+      .where(eq(users.email, email))
+    if (!concurrent) throw error
+    return createLinkForExistingAccount(concurrent)
   }
-  return { sessionToken, verificationToken, email }
+  return { email, token: verificationToken, purpose: "verification" }
 }
 
-export async function signInAccount(
+export async function requestSignInLink(
   emailValue: string,
-  password: string,
   clientIdentity: string,
-): Promise<{ sessionToken: string; emailVerified: boolean }> {
+): Promise<AuthLinkDispatch | null> {
   let email: string
   try {
     email = normalizeEmail(emailValue)
   } catch {
-    throw new Error(GENERIC_SIGN_IN_ERROR)
+    return null
   }
-  if (!await consumeRateLimitSlot("sign_in", email, clientIdentity)) {
-    throw new Error(GENERIC_SIGN_IN_ERROR)
-  }
+  if (!await consumeRateLimitSlot("sign_in", email, clientIdentity)) return null
   const db = await getDb()
-  const [account] = await db
-    .select({
-      userId: users.id,
-      emailVerifiedAt: users.emailVerifiedAt,
-      passwordHash: credentials.passwordHash,
-      passwordSalt: credentials.passwordSalt,
-      passwordIterations: credentials.passwordIterations,
-    })
-    .from(users)
-    .innerJoin(credentials, eq(users.id, credentials.userId))
-    .where(eq(users.email, email))
-  if (!account || !(await verifyPassword(password, account))) {
-    throw new Error(GENERIC_SIGN_IN_ERROR)
-  }
+  const [account] = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.email, email))
+  if (!account) return null
   return {
-    sessionToken: await createSession(account.userId),
-    emailVerified: Boolean(account.emailVerifiedAt),
+    email: account.email,
+    token: await createOwnedAuthLink(emailLoginTokens, account.id),
+    purpose: "sign_in",
   }
 }
 
@@ -138,80 +128,56 @@ export async function issueVerificationToken(user: UserRecord): Promise<string> 
   return createOwnedAuthLink(emailVerificationTokens, user.id)
 }
 
-export async function consumeEmailVerification(token: string): Promise<void> {
+export async function consumeEmailLink(token: string, purpose: EmailLinkPurpose): Promise<{ sessionToken: string }> {
   const now = new Date().toISOString()
   const digest = await digestOneTimeToken(token)
+  const table = tokenTable(purpose)
   const db = await getDb()
-  const [record] = await db
-    .select()
-    .from(emailVerificationTokens)
-    .where(eq(emailVerificationTokens.tokenDigest, digest))
-  const [user] = record
-    ? await db.select().from(users).where(eq(users.id, record.userId))
-    : []
-  const applied = user && record ? applyEmailVerification(user, record, now) : null
-  if (!applied) throw new Error(AUTH_LINK_INVALID)
-  const consumed = await db
-    .update(emailVerificationTokens)
+  const [consumed] = await db
+    .update(table)
     .set({ consumedAt: now })
     .where(and(
-      eq(emailVerificationTokens.tokenDigest, digest),
-      isNull(emailVerificationTokens.consumedAt),
-      gt(emailVerificationTokens.expiresAt, now),
+      eq(table.tokenDigest, digest),
+      isNull(table.consumedAt),
+      gt(table.expiresAt, now),
     ))
-    .returning({ tokenDigest: emailVerificationTokens.tokenDigest, userId: emailVerificationTokens.userId })
-  if (!consumed[0]) throw new Error(AUTH_LINK_INVALID)
-  await db
-    .update(users)
-    .set({ emailVerifiedAt: applied.user.emailVerifiedAt, updatedAt: now })
-    .where(eq(users.id, consumed[0].userId))
-}
+    .returning({ userId: table.userId })
+  if (!consumed) throw new Error(AUTH_LINK_INVALID)
 
-export async function requestPasswordReset(
-  emailValue: string,
-  clientIdentity: string,
-): Promise<{ email: string; resetToken: string } | null> {
-  let email: string
-  try {
-    email = normalizeEmail(emailValue)
-  } catch {
-    return null
-  }
-  if (!await consumeRateLimitSlot("password_reset", email, clientIdentity)) return null
-  const db = await getDb()
-  const [account] = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.email, email))
-  if (!account) return null
-  return { email: account.email, resetToken: await createOwnedAuthLink(passwordResetTokens, account.id) }
-}
-
-export async function completePasswordReset(token: string, password: string): Promise<void> {
-  const credential = await hashPassword(password)
-  const now = new Date().toISOString()
-  const digest = await digestOneTimeToken(token)
-  const db = await getDb()
-  const [record] = await db
-    .select()
-    .from(passwordResetTokens)
-    .where(eq(passwordResetTokens.tokenDigest, digest))
-  if (!record || !applyPasswordReset(record, now)) throw new Error(AUTH_LINK_INVALID)
-  const consumed = await db
-    .update(passwordResetTokens)
-    .set({ consumedAt: now })
-    .where(and(
-      eq(passwordResetTokens.tokenDigest, digest),
-      isNull(passwordResetTokens.consumedAt),
-      gt(passwordResetTokens.expiresAt, now),
-    ))
-    .returning({ userId: passwordResetTokens.userId })
-  if (!consumed[0]) throw new Error(AUTH_LINK_INVALID)
+  const sessionToken = createSessionToken()
   await db.batch([
-    db.update(credentials).set(credential).where(eq(credentials.userId, consumed[0].userId)),
-    db.delete(sessions).where(eq(sessions.userId, consumed[0].userId)),
+    db.update(users).set({
+      emailVerifiedAt: sql`coalesce(${users.emailVerifiedAt}, ${now})`,
+      updatedAt: now,
+    }).where(eq(users.id, consumed.userId)),
+    db.insert(sessions).values({
+      tokenDigest: await digestSessionToken(sessionToken),
+      userId: consumed.userId,
+      expiresAt: sessionExpiry(),
+    }),
   ])
+  return { sessionToken }
+}
+
+async function createLinkForExistingAccount(account: {
+  id: string
+  email: string
+  emailVerifiedAt: string | null
+}): Promise<AuthLinkDispatch> {
+  const purpose: EmailLinkPurpose = account.emailVerifiedAt ? "sign_in" : "verification"
+  return {
+    email: account.email,
+    token: await createOwnedAuthLink(tokenTable(purpose), account.id),
+    purpose,
+  }
+}
+
+function tokenTable(purpose: EmailLinkPurpose) {
+  return purpose === "sign_in" ? emailLoginTokens : emailVerificationTokens
 }
 
 async function createOwnedAuthLink(
-  table: typeof emailVerificationTokens | typeof passwordResetTokens,
+  table: typeof emailVerificationTokens | typeof emailLoginTokens,
   userId: string,
 ): Promise<string> {
   const now = new Date().toISOString()
@@ -247,13 +213,6 @@ async function consumeRateLimitSlot(
     await db.insert(rateLimitWindows).values(next.record)
   }
   return next.allowed
-}
-
-async function createSession(userId: string): Promise<string> {
-  const token = createSessionToken()
-  const db = await getDb()
-  await db.insert(sessions).values({ tokenDigest: await digestSessionToken(token), userId, expiresAt: sessionExpiry() })
-  return token
 }
 
 function sessionExpiry(): string {

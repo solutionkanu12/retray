@@ -25,12 +25,12 @@ export function SiteFooter({ onOpenLegal }: SiteFooterProps) {
         </div>
 
         <div className="social-links" aria-label="Social links">
-          <button aria-label="GitHub link not yet available" disabled title="GitHub link coming soon" type="button">
+          <a aria-label="ReTray on GitHub" href="https://github.com/solutionkanu12/retray" rel="noopener noreferrer" target="_blank">
             <FaGithub aria-hidden="true" size={18} />
-          </button>
-          <button aria-label="X link not yet available" disabled title="X link coming soon" type="button">
+          </a>
+          <a aria-label="ReTray on X" href="https://x.com/solution_o1" rel="noopener noreferrer" target="_blank">
             <FaXTwitter aria-hidden="true" size={17} />
-          </button>
+          </a>
           <button aria-label="Email link not yet available" disabled title="Email address coming soon" type="button">
             <Mail aria-hidden="true" size={19} />
           </button>

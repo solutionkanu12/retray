@@ -31,6 +31,14 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
   created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS email_verification_tokens_user_idx ON email_verification_tokens (user_id);
+CREATE TABLE IF NOT EXISTS email_login_tokens (
+  token_digest text PRIMARY KEY NOT NULL,
+  user_id text NOT NULL REFERENCES users(id),
+  expires_at text NOT NULL,
+  consumed_at text,
+  created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS email_login_tokens_user_idx ON email_login_tokens (user_id);
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   token_digest text PRIMARY KEY NOT NULL,
   user_id text NOT NULL REFERENCES users(id),
