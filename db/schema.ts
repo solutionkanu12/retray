@@ -51,6 +51,30 @@ export const emailLoginTokens = sqliteTable("email_login_tokens", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("email_login_tokens_user_idx").on(table.userId)])
 
+export const oauthAuthorizationStates = sqliteTable("oauth_authorization_states", {
+  stateDigest: text("state_digest").primaryKey(),
+  nonceDigest: text("nonce_digest").notNull(),
+  intent: text("intent", { enum: ["sign_in", "sign_up"] }).notNull(),
+  accountType: text("account_type", { enum: ["business_operator", "consumer"] }),
+  venueName: text("venue_name"),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("oauth_authorization_states_expiry_idx").on(table.expiresAt)])
+
+export const oauthIdentities = sqliteTable("oauth_identities", {
+  id: text("id").primaryKey(),
+  provider: text("provider", { enum: ["google"] }).notNull(),
+  providerSubject: text("provider_subject").notNull(),
+  userId: text("user_id").notNull().references(() => users.id),
+  email: text("email").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("oauth_identities_provider_subject_unique").on(table.provider, table.providerSubject),
+  uniqueIndex("oauth_identities_provider_user_unique").on(table.provider, table.userId),
+  index("oauth_identities_user_idx").on(table.userId),
+])
+
 export const passwordResetTokens = sqliteTable("password_reset_tokens", {
   tokenDigest: text("token_digest").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),

@@ -22,6 +22,7 @@ export default async function SignUpPage({ searchParams }: { searchParams: Promi
           <label>Email<input autoComplete="email" name="email" required type="email" /></label>
           <label className="auth-venue-field">Venue name for business operators<input maxLength={80} name="venueName" placeholder="Your venue" /></label>
           <button className="button button--rose" type="submit">Email me a sign-in link</button>
+          <button className="button button--outline" formAction="/api/auth/google/start" formNoValidate name="intent" type="submit" value="sign_up">Continue with Google</button>
         </form>
         <p>Already have an account? <Link className="text-link" href="/sign-in">Sign in</Link></p>
       </section>

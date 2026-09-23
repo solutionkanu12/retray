@@ -3,6 +3,8 @@ import { getDb } from "../db/index"
 import {
   emailLoginTokens,
   emailVerificationTokens,
+  oauthAuthorizationStates,
+  oauthIdentities,
   rateLimitWindows,
   sessions,
   users,
@@ -18,6 +20,13 @@ import {
 } from "./auth-email"
 import { createOneTimeToken, digestOneTimeToken } from "./auth-token"
 import type { AccountType } from "./circulation-domain"
+import {
+  googleAuthorizationUrl,
+  googleOAuthStateExpiresAt,
+  resolveGoogleAccount,
+  type GoogleIdentity,
+  type GoogleOAuthIntent,
+} from "./google-oauth"
 import { recordRateLimitAttempt, type RateLimitAction, type RateLimitRecord } from "./rate-limit"
 
 const SESSION_DAYS = 30
@@ -26,6 +35,13 @@ type AuthLinkDispatch = {
   email: string
   token: string
   purpose: EmailLinkPurpose
+}
+
+type GoogleOAuthState = {
+  nonceDigest: string
+  intent: GoogleOAuthIntent
+  accountType: AccountType | null
+  venueName: string | null
 }
 
 export async function registerAccount(input: {
@@ -105,6 +121,103 @@ export async function requestSignInLink(
   }
 }
 
+export async function beginGoogleOAuth(input: {
+  source: Record<string, unknown>
+  intent: GoogleOAuthIntent
+  accountType?: AccountType
+  venueName?: string
+}): Promise<string> {
+  const signUp = googleSignUpInput(input)
+  const state = createOneTimeToken()
+  const nonce = createOneTimeToken()
+  const db = await getDb()
+  await db.insert(oauthAuthorizationStates).values({
+    stateDigest: await digestOneTimeToken(state),
+    nonceDigest: await digestOneTimeToken(nonce),
+    intent: input.intent,
+    accountType: signUp.accountType,
+    venueName: signUp.venueName,
+    expiresAt: googleOAuthStateExpiresAt(),
+  })
+  return googleAuthorizationUrl(input.source, state, nonce)
+}
+
+export async function consumeGoogleOAuthState(state: string): Promise<GoogleOAuthState> {
+  const now = new Date().toISOString()
+  const db = await getDb()
+  const [consumed] = await db
+    .update(oauthAuthorizationStates)
+    .set({ consumedAt: now })
+    .where(and(
+      eq(oauthAuthorizationStates.stateDigest, await digestOneTimeToken(state)),
+      isNull(oauthAuthorizationStates.consumedAt),
+      gt(oauthAuthorizationStates.expiresAt, now),
+    ))
+    .returning({
+      nonceDigest: oauthAuthorizationStates.nonceDigest,
+      intent: oauthAuthorizationStates.intent,
+      accountType: oauthAuthorizationStates.accountType,
+      venueName: oauthAuthorizationStates.venueName,
+    })
+  if (!consumed || (consumed.intent !== "sign_in" && consumed.intent !== "sign_up")) {
+    throw new Error("Google sign-in could not be completed.")
+  }
+  return {
+    nonceDigest: consumed.nonceDigest,
+    intent: consumed.intent,
+    accountType: consumed.accountType as AccountType | null,
+    venueName: consumed.venueName,
+  }
+}
+
+export async function completeGoogleSignIn(input: {
+  identity: GoogleIdentity
+  state: GoogleOAuthState
+}): Promise<{ sessionToken: string }> {
+  const db = await getDb()
+  const [linked] = await db
+    .select({ user: users })
+    .from(oauthIdentities)
+    .innerJoin(users, eq(oauthIdentities.userId, users.id))
+    .where(and(eq(oauthIdentities.provider, "google"), eq(oauthIdentities.providerSubject, input.identity.subject)))
+  const [emailUser] = await db
+    .select({ id: users.id, email: users.email, accountType: users.accountType })
+    .from(users)
+    .where(eq(users.email, input.identity.email))
+  const resolved = resolveGoogleAccount({
+    linkedUser: linked?.user ?? null,
+    emailUser: emailUser ?? null,
+    signUp: {
+      accountType: input.state.accountType ?? "consumer",
+      venueName: input.state.venueName,
+    },
+  })
+
+  let userId: string
+  if (resolved.action === "use_linked") {
+    userId = resolved.user.id
+  } else if (resolved.action === "link_existing") {
+    userId = await linkGoogleIdentity(resolved.user.id, input.identity)
+  } else {
+    userId = await createGoogleAccount(input.identity, resolved.accountType, resolved.venueName)
+  }
+
+  const now = new Date().toISOString()
+  const sessionToken = createSessionToken()
+  await db.batch([
+    db.update(users).set({
+      emailVerifiedAt: sql`coalesce(${users.emailVerifiedAt}, ${now})`,
+      updatedAt: now,
+    }).where(eq(users.id, userId)),
+    db.insert(sessions).values({
+      tokenDigest: await digestSessionToken(sessionToken),
+      userId,
+      expiresAt: sessionExpiry(),
+    }),
+  ])
+  return { sessionToken }
+}
+
 export async function getSessionUser(token: string | undefined): Promise<UserRecord | null> {
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null
   const db = await getDb()
@@ -169,6 +282,93 @@ async function createLinkForExistingAccount(account: {
     email: account.email,
     token: await createOwnedAuthLink(tokenTable(purpose), account.id),
     purpose,
+  }
+}
+
+function googleSignUpInput(input: {
+  intent: GoogleOAuthIntent
+  accountType?: AccountType
+  venueName?: string
+}): { accountType: AccountType | null; venueName: string | null } {
+  if (input.intent === "sign_in") return { accountType: null, venueName: null }
+  if (input.accountType !== "consumer" && input.accountType !== "business_operator") {
+    throw new Error("Choose an account type.")
+  }
+  return {
+    accountType: input.accountType,
+    venueName: input.accountType === "business_operator"
+      ? requiredName(input.venueName ?? "", "Venue name")
+      : null,
+  }
+}
+
+async function linkGoogleIdentity(userId: string, identity: GoogleIdentity): Promise<string> {
+  const db = await getDb()
+  try {
+    await db.insert(oauthIdentities).values({
+      id: crypto.randomUUID(),
+      provider: "google",
+      providerSubject: identity.subject,
+      userId,
+      email: identity.email,
+    })
+    return userId
+  } catch {
+    const [linked] = await db
+      .select({ userId: oauthIdentities.userId })
+      .from(oauthIdentities)
+      .where(and(eq(oauthIdentities.provider, "google"), eq(oauthIdentities.providerSubject, identity.subject)))
+    if (linked) return linked.userId
+    throw new Error("Google sign-in could not be completed.")
+  }
+}
+
+async function createGoogleAccount(
+  identity: GoogleIdentity,
+  accountType: AccountType,
+  venueName: string | null,
+): Promise<string> {
+  const db = await getDb()
+  const userId = crypto.randomUUID()
+  try {
+    const insertUser = db.insert(users).values({
+      id: userId,
+      email: identity.email,
+      displayName: requiredName(identity.displayName, "Name"),
+      accountType,
+      emailVerifiedAt: new Date().toISOString(),
+    })
+    const insertIdentity = db.insert(oauthIdentities).values({
+      id: crypto.randomUUID(),
+      provider: "google",
+      providerSubject: identity.subject,
+      userId,
+      email: identity.email,
+    })
+    if (accountType === "business_operator") {
+      if (!venueName) throw new Error("Venue name must be 1 to 80 characters.")
+      await db.batch([
+        insertUser,
+        db.insert(venues).values({
+          id: crypto.randomUUID(),
+          ownerUserId: userId,
+          name: venueName,
+        }),
+        insertIdentity,
+      ])
+    } else {
+      await db.batch([insertUser, insertIdentity])
+    }
+    return userId
+  } catch (error) {
+    const [linked] = await db
+      .select({ userId: oauthIdentities.userId })
+      .from(oauthIdentities)
+      .where(and(eq(oauthIdentities.provider, "google"), eq(oauthIdentities.providerSubject, identity.subject)))
+    if (linked) return linked.userId
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, identity.email))
+    if (existing) return linkGoogleIdentity(existing.id, identity)
+    throw error
   }
 }
 

@@ -17,6 +17,10 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
           <label>Email<input autoComplete="email" name="email" required type="email" /></label>
           <button className="button button--rose" type="submit">Email me a sign-in link</button>
         </form>
+        <form action="/api/auth/google/start" className="stacked-form auth-form" method="post">
+          <input name="intent" type="hidden" value="sign_in" />
+          <button className="button button--outline" type="submit">Continue with Google</button>
+        </form>
         <p>New to ReTray? <Link className="text-link" href="/sign-up">Create an account</Link></p>
       </section>
     </main>

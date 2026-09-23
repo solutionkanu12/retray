@@ -39,6 +39,28 @@ CREATE TABLE IF NOT EXISTS email_login_tokens (
   created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS email_login_tokens_user_idx ON email_login_tokens (user_id);
+CREATE TABLE IF NOT EXISTS oauth_authorization_states (
+  state_digest text PRIMARY KEY NOT NULL,
+  nonce_digest text NOT NULL,
+  intent text NOT NULL,
+  account_type text,
+  venue_name text,
+  expires_at text NOT NULL,
+  consumed_at text,
+  created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS oauth_authorization_states_expiry_idx ON oauth_authorization_states (expires_at);
+CREATE TABLE IF NOT EXISTS oauth_identities (
+  id text PRIMARY KEY NOT NULL,
+  provider text NOT NULL,
+  provider_subject text NOT NULL,
+  user_id text NOT NULL REFERENCES users(id),
+  email text NOT NULL,
+  created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS oauth_identities_provider_subject_unique ON oauth_identities (provider, provider_subject);
+CREATE UNIQUE INDEX IF NOT EXISTS oauth_identities_provider_user_unique ON oauth_identities (provider, user_id);
+CREATE INDEX IF NOT EXISTS oauth_identities_user_idx ON oauth_identities (user_id);
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   token_digest text PRIMARY KEY NOT NULL,
   user_id text NOT NULL REFERENCES users(id),
