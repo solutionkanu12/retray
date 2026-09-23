@@ -133,7 +133,7 @@ See [SECURITY.md](SECURITY.md) for the product's authentication, data, payment, 
 | Mobile QR camera | Verified on a physical phone with retained evidence |
 | Paystack payment | TEST mode, verified `charge.success` webhook |
 | Paystack refund | TEST mode, verified `refund.processed` webhook |
-| Tests | 81 passing at the final Task 7 gate |
+| Tests | `pnpm test` passes |
 | Lint | Passing |
 | TypeScript | Passing |
 | Build | Passing |
@@ -188,7 +188,7 @@ pnpm exec tsc --noEmit
 pnpm build
 ```
 
-The final Task 7 gate recorded 81 passing tests. See [docs/TESTING.md](docs/TESTING.md) for the manual verification checklist.
+See [docs/TESTING.md](docs/TESTING.md) for the manual verification checklist.
 
 ## Repository Structure
 
