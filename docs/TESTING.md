@@ -5,19 +5,20 @@
 ```sh
 pnpm test
 pnpm lint
+pnpm exec tsc --noEmit
 pnpm build
 ```
 
 ## Manual journey
 
-1. Open the landing page.
-2. Select View demo.
-3. Open the issue scan for RT-024.
-4. Continue to Maya's return pass.
-5. Select Scan return point.
-6. Wait for confirmation.
-7. Select See the updated venue loop.
-8. Confirm RT-024 is Ready to wash, containers out is 17, wash queue is 7, and packs avoided is 1,285.
+1. Open the HTTPS landing page and select View demo.
+2. Create or use a verified Business account, then create a venue and register a container.
+3. Issue the container to a verified Consumer with a deposit amount when appropriate.
+4. In the Consumer account, verify that only its own borrow appears.
+5. Return the active container with a browser QR scan where supported or the manual QR fallback.
+6. Confirm the Business ledger shows the returned state and the Consumer sees the matching return state.
+7. For Paystack TEST only, verify that browser return leaves a payment pending until a signed `charge.success` webhook is processed.
+8. Request a refund only for an eligible paid and returned TEST deposit, then retain the signed provider outcome before claiming a refund.
 
 ## Responsive checks
 
@@ -27,3 +28,4 @@ pnpm build
 - No horizontal scroll, clipped copy, unreachable controls, or overlapping navigation.
 - Keyboard focus is visible and follows the flow.
 - Enable reduced motion and confirm view changes do not force smooth scrolling.
+- Retain evidence for HTTPS mobile access, granted and denied camera permission, successful QR resolution, and manual QR fallback before claiming phone-camera proof.

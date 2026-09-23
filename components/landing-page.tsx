@@ -22,7 +22,7 @@ export function LandingPage({ onOpenDemo, onOpenLegal }: LandingPageProps) {
             <p className="eyebrow">{heroEyebrow}</p>
             <h1 data-view-heading tabIndex={-1}>The takeaway pack that comes back.</h1>
             <p className="hero__lede">
-              ReTray helps food venues issue, recover, wash, and recirculate reusable containers without losing track of the loop.
+              ReTray helps food venues issue, recover, wash, and recirculate reusable containers without losing track of the loop. The working demo includes authenticated accounts, saved circulation records, browser QR support, and Paystack TEST deposits.
             </p>
             <div className="button-row">
               <button className="button button--rose" onClick={onOpenDemo} type="button">
@@ -34,9 +34,9 @@ export function LandingPage({ onOpenDemo, onOpenLegal }: LandingPageProps) {
             </div>
           </div>
 
-          <div className="hero-proof reveal-in reveal-in--delay" aria-label="Live circulation proof">
+          <div className="hero-proof reveal-in reveal-in--delay" aria-label="Demo circulation proof">
             <div className="hero-proof__top">
-              <span className="micro-label">Live circulation</span>
+              <span className="micro-label">Demo circulation</span>
               <span className="live-dot"><i /> Kora Kitchen</span>
             </div>
             <div className="hero-proof__container">

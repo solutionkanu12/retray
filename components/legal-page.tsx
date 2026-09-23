@@ -22,14 +22,14 @@ export function LegalPage({ page, onBack }: LegalPageProps) {
         <p className="legal-copy__date">Effective 11 September 2026</p>
         {isPrivacy ? (
           <>
-            <h2>About this MVP</h2>
-            <p>ReTray uses authenticated account details to provide operator and consumer access. It stores venues, container records, borrow records, and circulation events needed to run the reusable-container loop.</p>
+            <h2>About this deployment</h2>
+            <p>ReTray is a hackathon deployment with passwordless email links and Google sign-in for Business operators and Consumers. It stores the venue and circulation records needed to run the reusable-container loop.</p>
             <h2>Information stored</h2>
-            <p>Account identity, venue names, container identifiers, consumer assignments, timestamps, and deposit ledger states are stored in the product database. Seeded records are labeled as demo data.</p>
+            <p>Account identity, venue names, container identifiers, consumer assignments, timestamps, and deposit states are persisted in Cloudflare D1. Seeded records are labeled as demo data.</p>
             <h2>Camera access</h2>
-            <p>The operator scanner requests camera access only after the operator starts it. QR frames are decoded in the browser and are not stored as images.</p>
+            <p>The Business and Consumer scanners request camera access only after the person selects Start camera. QR frames are decoded in the browser and are not stored as images. A manual QR fallback remains available.</p>
             <h2>Payments and location</h2>
-            <p>ReTray does not collect or release money and does not request precise location. Deposit entries describe the ledger state only.</p>
+            <p>ReTray supports Paystack TEST checkout and refund requests with test money. A browser return is not authoritative. Paid and refunded states change only after a verified Paystack webhook. ReTray does not process live payments, hold real customer funds, or request precise location.</p>
             <h2>External content</h2>
             <p>The landing page loads one licensed photograph from Pexels and typefaces from Google Fonts. Those providers may receive ordinary browser request information under their own policies.</p>
             <h2>Contact</h2>
@@ -37,10 +37,10 @@ export function LegalPage({ page, onBack }: LegalPageProps) {
           </>
         ) : (
           <>
-            <h2>MVP use</h2>
-            <p>ReTray records reusable-container operations for authenticated business operators and consumers. It is not a payment system or a venue agreement.</p>
-            <h2>Deposit ledger</h2>
-            <p>Deposit amounts and statuses are operational ledger entries only. ReTray does not collect, hold, release, or transfer money.</p>
+            <h2>Hackathon use</h2>
+            <p>ReTray records reusable-container operations for authenticated Business operators and Consumers. It is not a live payment system or a venue agreement.</p>
+            <h2>Paystack TEST deposits</h2>
+            <p>Paystack integration uses TEST mode and test money only. A refund can be requested only for an eligible returned and paid deposit. Provider verification controls the final deposit state.</p>
             <h2>Availability</h2>
             <p>The MVP may change or become unavailable. Authentication creates a ReTray account record, but no purchase or payment account is created.</p>
             <h2>Responsible use</h2>

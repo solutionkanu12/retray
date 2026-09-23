@@ -12,11 +12,11 @@ Disposable takeaway packaging is used once because food venues lack a simple way
 
 ## Product truth
 
-The environmental effect is direct: every successful return enables one reusable container to replace one disposable takeaway pack. Do not claim carbon, water, payment processing, live scanning, or production integrations until they exist.
+The environmental effect is direct: every successful return enables one reusable container to replace one disposable takeaway pack. Do not claim carbon or water savings. ReTray has browser QR support, persistent production D1 records, and Paystack TEST integration, but it does not process live payments or financial settlement.
 
 ## Prototype story
 
-Kora Kitchen issues RT-024 to Maya L. Maya receives a return pass with a simulated EUR 3.00 deposit. She scans the return point. The prototype confirms the return, marks RT-024 Ready to wash, and updates the venue ledger from 18 to 17 containers out and from 1,284 to 1,285 disposable packs avoided.
+Kora Kitchen issues RT-024 to Maya L. Maya receives a return pass with a EUR 3.00 demo deposit. She scans the return point. The demo confirms the return, marks RT-024 Ready to wash, and updates the venue ledger from 18 to 17 containers out and from 1,284 to 1,285 disposable packs avoided.
 
 ## Primary users
 
@@ -25,13 +25,13 @@ Kora Kitchen issues RT-024 to Maya L. Maya receives a return pass with a simulat
 
 ## Phase A product foundation
 
-The prototype journey is now backed by authenticated accounts and persistent D1 records. Business operators manage venues and container circulation. Consumers see their own current and returned borrows. Camera QR detection is available in supported browsers with a manual QR ID fallback.
+The hackathon deployment uses passwordless email links, Google OAuth, authenticated accounts, and persistent D1 records. Business operators manage venues and container circulation. Consumers see only their own current and returned borrows. Camera QR detection is available in supported browsers with a manual QR ID fallback.
 
-Deposit values remain ledger records only. ReTray does not collect, hold, release, or transfer money.
+Paystack TEST deposits and refunds use test money only. A browser return does not change a payment state. Signed provider webhooks control paid and refunded states.
 
 ## Current non-goals
 
-- Real payment collection or release
+- Live payment collection, release, or settlement
 - Delivery, a marketplace, recycling education, rewards, or city-wide availability
 - Native scanning hardware or precise location
 

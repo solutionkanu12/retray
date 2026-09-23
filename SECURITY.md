@@ -1,17 +1,18 @@
 # ReTray Security and Truthfulness Rules
 
-## Phase A boundary
+## Hackathon deployment boundary
 
-ReTray signs up consumers and business operators with email and password. Passwords are salted and hashed with PBKDF2-SHA-256. Opaque, HttpOnly session cookies map to hashed session tokens in D1, and account actions use the D1 session rather than Sites identity headers. It stores the minimum account identity, venue, container, borrow, and circulation data needed for the product loop. It does not request payment information, wallet access, or location access.
+ReTray signs up Consumers and Business operators with passwordless email links or Google OAuth. Email links are 15-minute and single-use. Opaque, HttpOnly session cookies map to hashed session tokens in D1, and account actions use the D1 session rather than Sites identity headers. It stores the minimum account identity, venue, container, borrow, payment, refund, and circulation data needed for the product loop. It does not request wallet access or precise location.
 
 Camera access begins only after an operator or consumer selects Start camera. QR frames are decoded in the browser and are not stored as images. A manual QR ID fallback remains available.
 
 ## Non-negotiable claims
 
-- New deposit ledger values default to 0. An operator may enter an expected refundable amount at issue. No money moves.
+- New deposit values default to 0. An operator may enter an expected refundable amount at issue.
+- Paystack checkout and refunds use TEST mode and test money only. ReTray does not process live payments, hold real funds, or provide financial settlement.
+- A browser return never marks a payment paid. Signed Paystack webhooks control paid and refunded states, with stored event digests for duplicate-event protection.
 - QR IDs and circulation actions are persisted.
 - Kora Kitchen, Maya L., RT-024, and EUR 3.00 are optional demo examples, not records created for new accounts.
-- No transaction is created and no money moves.
 
 ## Access and audit rules
 
@@ -21,4 +22,4 @@ Camera access begins only after an operator or consumer selects Start camera. QR
 - Every server action re-reads the authenticated identity and checks ownership.
 - Account type is fixed at signup.
 
-Email verification, password reset, and account-level login throttling are not implemented. Do not describe this MVP as production-hardened authentication.
+Passwordless email verification and sign-in throttling per email and client combination are implemented. Password reset is not applicable because ReTray does not collect passwords. Do not describe this hackathon deployment as production-hardened authentication or a live financial service.
